@@ -16,7 +16,7 @@ public static class ResponseBuilder
     {
         { "Content-Type", "application/json" },
         { "Access-Control-Allow-Origin", "*" },
-        { "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS" },
+        { "Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS" },
         { "Access-Control-Allow-Headers", "Content-Type, Authorization" }
     };
 
@@ -127,7 +127,7 @@ public static class ResponseBuilder
                 { "Content-Type", contentType },
                 { "Content-Disposition", $"attachment; filename=\"{fileName}\"" },
                 { "Access-Control-Allow-Origin", "*" },
-                { "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS" },
+                { "Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS" },
                 { "Access-Control-Allow-Headers", "Content-Type, Authorization" }
             }
         };

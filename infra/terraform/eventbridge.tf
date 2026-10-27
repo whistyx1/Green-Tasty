@@ -2,6 +2,7 @@ resource "aws_scheduler_schedule" "weekly_reports" {
   name        = "weekly-reports-schedule"
   group_name  = "default"
   description = "Weekly reports generation"
+  state       = var.enable_weekly_reports ? "ENABLED" : "DISABLED"
 
   schedule_expression          = "cron(0 8 ? * FRI *)"
   schedule_expression_timezone = "UTC"
@@ -19,4 +20,12 @@ resource "aws_scheduler_schedule" "weekly_reports" {
       maximum_retry_attempts       = 3
     }
   }
+  lifecycle {
+    precondition {
+      condition     = !var.enable_weekly_reports || can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", var.email_from))
+      error_message = "Provide an SES-verified email_from before enabling weekly reports."
+    }
+  }
+
+  depends_on = [aws_iam_role_policy_attachment.event_bridge]
 }

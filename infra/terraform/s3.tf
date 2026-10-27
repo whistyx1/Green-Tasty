@@ -1,7 +1,7 @@
-# --- images bucket: public read for /assets/img/dishes and /assets/img/locations, IP-restricted ---
+# --- images bucket: public read for /assets/img/dishes and /assets/img/locations ---
 
 resource "aws_s3_bucket" "images" {
-  bucket = "restaurant-backend-dev-images-${var.account_id}"
+  bucket = "restaurant-backend-dev-images-${local.account_id}"
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "images" {
@@ -47,7 +47,7 @@ resource "aws_s3_bucket_policy" "images" {
 # --- profile images bucket: fully private, accessed only via presigned URLs from Lambda ---
 
 resource "aws_s3_bucket" "profile_images" {
-  bucket = "restaurant-backend-dev-profile-images-${var.account_id}"
+  bucket = "restaurant-backend-dev-profile-images-${local.account_id}"
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "profile_images" {
@@ -71,7 +71,7 @@ resource "aws_s3_bucket_public_access_block" "profile_images" {
 # --- swagger-ui bucket: static website hosting, public read ---
 
 resource "aws_s3_bucket" "swagger_ui" {
-  bucket = "restaurant-backend-dev-swagger-ui-${var.account_id}"
+  bucket = "restaurant-backend-dev-swagger-ui-${local.account_id}"
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "swagger_ui" {
@@ -129,7 +129,7 @@ resource "aws_s3_bucket_policy" "swagger_ui" {
 # needs the bucket to be otherwise private. ---
 
 resource "aws_s3_bucket" "frontend" {
-  bucket = "restaurant-frontend-${var.account_id}"
+  bucket = "restaurant-frontend-${local.account_id}"
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {

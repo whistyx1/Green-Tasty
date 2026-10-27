@@ -34,6 +34,15 @@ public partial class Function
             return ResponseBuilder.CreateOptionsResponse();
         }
 
+        var authorizationStatus = ManagementAuthorization.GetErrorStatus(request);
+        if (authorizationStatus.HasValue)
+        {
+            return ResponseBuilder.CreateErrorResponse(
+                authorizationStatus.Value,
+                authorizationStatus == 401 ? "Authentication required" : "Administrator access required",
+                context.Logger);
+        }
+
         context.Logger.LogLine($"Received request: {method} {path}");
 
         // Use only for debugging purposes. May contain sensitive information.

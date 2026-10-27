@@ -1,6 +1,4 @@
-# IAM role/policy used by the EventBridge Scheduler to invoke report-sender.
-# lambda-basic-execution and the per-lambda roles (api-handler-role, report-sender-role,
-# reports-handler-role) stay managed by Syndicate — not migrated here.
+# EventBridge Scheduler invokes the Terraform-managed report-sender alias.
 
 resource "aws_iam_role" "event_bridge" {
   name = "event-bridge-role"

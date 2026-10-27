@@ -24,3 +24,15 @@ node_modules/
 *.tfvars.json
 crash.log
 crash.*.log
+
+# Local deployment configuration and packages
+backend.local.hcl
+*.tfplan
+artifacts/
+.build/
+syndicate_venv/
+.env.*
+
+# Python caches
+__pycache__/
+*.py[cod]
