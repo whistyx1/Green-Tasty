@@ -1,0 +1,164 @@
+{
+  "/waiters": {
+    "POST": true,
+    "DELETE": true
+  },
+  "/waiters/{userId}/location": {
+    "GET": false
+  },
+  "/register": {
+    "POST": false
+  },
+  "/signin": {
+    "POST": false
+  },
+  "/feedback": {
+    "GET": false,
+    "POST": false,
+    "PUT": true
+  },
+  "/locations": {
+    "POST": true,
+    "GET": false
+  },
+  "/locations/{id}": {
+    "GET": false,
+    "PUT": true,
+    "DELETE": true
+  },
+  "/locations/{locationId}/dishes/{dishId}": {
+    "DELETE": true
+  },
+  "/locations/{locationId}/tables/all": {
+    "GET": true
+  },
+  "/tables/{id}": {
+    "PUT": true,
+    "DELETE": true
+  },
+  "/available-tables": {
+    "GET": false
+  },
+  "/tables": {
+    "POST": true
+  },
+  "/dishes": {
+    "POST": true,
+    "GET": false
+  },
+  "/dishes/{id}": {
+    "GET": false,
+    "PUT": true,
+    "DELETE": true
+  },
+  "/dishes/popular": {
+    "GET": false
+  },
+  "/locations/{id}/dishes": {
+    "GET": false
+  },
+  "/users/{id}/name": {
+    "GET": true
+  },
+  "/me": {
+    "GET": true,
+    "PUT": true
+  },
+  "/me/change-password": {
+    "PUT": true
+  },
+  "/reservations": {
+    "POST": true,
+    "GET": true,
+    "DELETE": true,
+    "PUT": true
+  },
+  "/reservations/{reservationId}/feedback": {
+    "GET": false
+  },
+  "/tables/{id}/available-time-slots": {
+    "GET": false
+  },
+  "/users": {
+    "GET": true
+  },
+  "/users/{id}/profile-image": {
+    "GET": false
+  },
+  "/me/profile-image": {
+    "PUT": true
+  },
+  "/orders": {
+    "GET": true,
+    "POST": true
+  },
+  "/orders/{reservationId}": {
+    "GET": true,
+    "PUT": true,
+    "DELETE": true
+  },
+  "/orders/{reservationId}/submit": {
+    "POST": true
+  },
+  "/orders/{reservationId}/unsubmit": {
+    "POST": true
+  },
+  "/reservations/{reservationId}": {
+    "GET": true
+  },
+  "/reservations/{reservationId}/status": {
+    "PATCH": true
+  },
+  "/reservations/{reservationId}/table": {
+    "PATCH": true
+  },
+  "/reservations/{reservationId}/order/confirmations/{dishId}": {
+    "PATCH": true
+  },
+  "/reservations/{reservationId}/order/cancellations/{dishId}": {
+    "PATCH": true
+  },
+  "/reports/download": {
+    "GET": true
+  },
+  "/reports/generate": {
+    "GET": true
+  },
+  "/reports": {
+    "GET": true
+  },
+  "/notifications": {
+    "GET": true
+  },
+  "/notifications/{id}/read": {
+    "PATCH": true
+  },
+  "/guest/invites/{token}": {
+    "GET": false
+  },
+  "/guest/sessions": {
+    "POST": false
+  },
+  "/guest/sessions/{guestSessionId}/dishes": {
+    "POST": false,
+    "DELETE": false
+  },
+  "/guest/groups/{groupReservationId}/sessions/{guestSessionId}": {
+    "DELETE": true
+  },
+  "/guest/groups/{groupReservationId}/status": {
+    "GET": false
+  },
+  "/guest/sessions/{guestSessionId}/menu": {
+    "GET": false
+  },
+  "/guest/sessions/{guestSessionId}/submit": {
+    "POST": false
+  },
+  "/reservations/{reservationId}/invite-token": {
+    "GET": true
+  },
+  "/guest/sessions/{guestSessionId}": {
+    "GET": false
+  }
+}

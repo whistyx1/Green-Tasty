@@ -1,0 +1,188 @@
+{
+  "Waiters": {
+    "hash_key": "userId",
+    "range_key": null,
+    "attributes": {
+      "userId": "S",
+      "locationId": "S"
+    },
+    "indexes": {
+      "locationId-index": {
+        "hash_key": "locationId",
+        "range_key": null
+      }
+    }
+  },
+  "Feedback": {
+    "hash_key": "reservationId",
+    "range_key": "createdAt",
+    "attributes": {
+      "reservationId": "S",
+      "createdAt": "S",
+      "locationId": "S"
+    },
+    "indexes": {
+      "locationId-createdAt-index": {
+        "hash_key": "locationId",
+        "range_key": "createdAt"
+      }
+    }
+  },
+  "Tables": {
+    "hash_key": "id",
+    "range_key": null,
+    "attributes": {
+      "id": "S",
+      "locationId": "S",
+      "tableNumber": "N"
+    },
+    "indexes": {
+      "locationId-tableNumber-index": {
+        "hash_key": "locationId",
+        "range_key": "tableNumber"
+      }
+    }
+  },
+  "Dishes": {
+    "hash_key": "id",
+    "range_key": null,
+    "attributes": {
+      "id": "S"
+    },
+    "indexes": {}
+  },
+  "Reservations": {
+    "hash_key": "id",
+    "range_key": null,
+    "attributes": {
+      "id": "S",
+      "tableId": "S",
+      "waiterId": "S",
+      "customerId": "S"
+    },
+    "indexes": {
+      "GSI_ByTableId": {
+        "hash_key": "tableId",
+        "range_key": null
+      },
+      "GSI_WaiterId": {
+        "hash_key": "waiterId",
+        "range_key": null
+      },
+      "GSI_UserId": {
+        "hash_key": "customerId",
+        "range_key": null
+      }
+    }
+  },
+  "Locations": {
+    "hash_key": "id",
+    "range_key": null,
+    "attributes": {
+      "id": "S"
+    },
+    "indexes": {}
+  },
+  "ProfileImages": {
+    "hash_key": "userId",
+    "range_key": null,
+    "attributes": {
+      "userId": "S"
+    },
+    "indexes": {}
+  },
+  "Orders": {
+    "hash_key": "orderId",
+    "range_key": "customerId",
+    "attributes": {
+      "orderId": "S",
+      "customerId": "S",
+      "reservationId": "S"
+    },
+    "indexes": {
+      "GSI_CustomerId": {
+        "hash_key": "customerId",
+        "range_key": null
+      },
+      "GSI_ReservationId": {
+        "hash_key": "reservationId",
+        "range_key": null
+      }
+    }
+  },
+  "Reports": {
+    "hash_key": "waiterId",
+    "range_key": "date",
+    "attributes": {
+      "waiterId": "S",
+      "date": "S"
+    },
+    "indexes": {}
+  },
+  "ReportsHistory": {
+    "hash_key": "id",
+    "range_key": null,
+    "attributes": {
+      "id": "S",
+      "userId": "S"
+    },
+    "indexes": {
+      "UserIdIndex": {
+        "hash_key": "userId",
+        "range_key": null
+      }
+    }
+  },
+  "Notifications": {
+    "hash_key": "id",
+    "range_key": null,
+    "attributes": {
+      "id": "S",
+      "userId": "S"
+    },
+    "indexes": {
+      "UserIdIndex": {
+        "hash_key": "userId",
+        "range_key": null
+      }
+    }
+  },
+  "GroupReservations": {
+    "hash_key": "groupReservationId",
+    "range_key": null,
+    "attributes": {
+      "groupReservationId": "S",
+      "reservationToken": "S",
+      "reservationId": "S"
+    },
+    "indexes": {
+      "reservationToken": {
+        "hash_key": "reservationToken",
+        "range_key": null
+      },
+      "reservationId": {
+        "hash_key": "reservationId",
+        "range_key": null
+      }
+    }
+  },
+  "GuestSessions": {
+    "hash_key": "guestSessionId",
+    "range_key": null,
+    "attributes": {
+      "guestSessionId": "S",
+      "groupReservationId": "S",
+      "guestSessionTokenHash": "S"
+    },
+    "indexes": {
+      "groupReservationId": {
+        "hash_key": "groupReservationId",
+        "range_key": null
+      },
+      "guestSessionTokenHash": {
+        "hash_key": "guestSessionTokenHash",
+        "range_key": null
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+# Copy to terraform.tfvars (ignored by Git). No AWS credentials belong here.
+aws_region = "us-west-2"
+
+# Optional protection: reject credentials for any other account.
+# account_id = "YOUR_12_DIGIT_ACCOUNT_ID"
+
+alert_emails       = ["replace-with-your-email@example.com"]
+monthly_budget_usd = 10
+
+# Keep disabled until the address is verified in SES in us-west-2.
+email_from            = ""
+enable_weekly_reports = false

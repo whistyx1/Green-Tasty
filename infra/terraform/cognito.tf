@@ -48,3 +48,9 @@ resource "aws_cognito_user_pool_client" "backend_api" {
     ignore_changes = [generate_secret]
   }
 }
+
+resource "aws_cognito_user_group" "roles" {
+  for_each     = toset(["Admin", "Waiter", "Customer"])
+  name         = each.key
+  user_pool_id = aws_cognito_user_pool.backend.id
+}
