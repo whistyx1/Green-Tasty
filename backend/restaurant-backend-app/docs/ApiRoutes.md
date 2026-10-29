@@ -555,6 +555,12 @@ Response: `200 OK`
 ```
 
 ### `GET` /reservations/{reservationId}/guest-session-id
+Requires the reservation Owner's Cognito ID token. Returns a stable Owner
+session ID and creates empty session metadata if it is missing (including older
+bookings). The ID is not a guest bearer token. See [level 2](BackendLevel2.md).
+Errors: 401 anonymous, 403 non-owner, 404 reservation/group missing, 409 inactive
+group when a new session would be needed.
+
 Response: `200 OK`
 ```json
 {
@@ -1180,30 +1186,85 @@ Response: 200 OK
 ```
 
 ### `POST` /group-reservations/{groupReservationId}/submit
-Response: 200 OK
+Requires the reservation Owner's Cognito ID token. Merges only submitted carts
+into the existing ordinary preorder, combining equal dish IDs. Saves order
+`SubmittedByCustomer` and group `Submitted` atomically. Draft carts are excluded.
+Request body:
 ```json
-{
-  "message": "Group reservation pre-order submitted successfully."
-}
+{ "reservationId": "reservation-123" }
 ```
-
-### `GET` /guest/groups/{groupReservationId}/sessions
-Response: 200 OK
+Response: `200 OK` (the final consolidated order):
 ```json
 [
-  {
-    "id": "string",
-    "groupReservationId": "string",
-    "guestName": "string",
-    "status": "string"
-  }
+  { "dishId": "dish-1", "quantity": 3 },
+  { "dishId": "dish-2", "quantity": 2 }
 ]
 ```
+Errors: 401 anonymous, 403 non-owner, 404 missing group/reservation; 400 invalid
+body, mismatched reservation, no submitted carts/dishes, missing order, unavailable
+dishes, or preorder deadline passed; 409 inactive/already submitted group,
+processed order, or concurrent changes. A retry cannot append quantities twice.
+See [level 2 verification](BackendLevel2.md).
 
-### `DELETE` /guest/groups/{groupReservationId}/sessions/{guestSessionId}
-Response: 200 OK
+### `GET` /guest/groups/{groupReservationId}/sessions
+Requires the reservation Owner's Cognito ID token. Admin and Waiter roles do not
+grant access to another customer's group. Reads all existing sessions, including
+submitted and unsubmitted carts; this request does not create sessions.
+
+Response: `200 OK`
 ```json
 {
-  "message": "Guest session removed from group successfully."
+  "participants": [
+    {
+      "id": "session-1",
+      "type": "Guest",
+      "name": "Andrii",
+      "items": [
+        {
+          "dish": { "id": "dish-1", "name": "Salad", "price": 8 },
+          "quantity": 2
+        }
+      ],
+      "total": 16,
+      "isSubmitted": false
+    }
+  ],
+  "total": 16
 }
 ```
+
+Dish objects can include additional existing dish-detail fields. Owner sessions,
+when present, use `"type": "Owner"`. A group without sessions returns
+`{ "participants": [], "total": 0 }`.
+
+Errors: `401` without a valid identity, `403` for a non-owner, `404` when the group,
+parent reservation, or a dish referenced by a cart no longer exists.
+
+See [Backend level 1 manual checks](BackendLevel1.md) for deployment and test steps.
+
+### `DELETE` /guest/groups/{groupReservationId}/sessions/{guestSessionId}
+Requires the reservation Owner's Cognito ID token. Removes a guest from an open,
+active group and returns the updated snapshot, using the same format as GET
+`/guest/groups/{groupReservationId}/sessions`. The Owner session cannot be removed.
+
+Response: `200 OK` (example after removing the only guest; an empty Owner remains):
+```json
+{
+  "participants": [
+    {
+      "id": "owner-session",
+      "type": "Owner",
+      "name": "Owner name",
+      "items": [],
+      "total": 0,
+      "isSubmitted": false
+    }
+  ],
+  "total": 0
+}
+```
+Errors: 401 anonymous, 403 non-owner, 404 missing group/reservation/session/dish;
+400 session belongs to another group or is the Owner; 409 inactive reservation,
+closed group, or submitted group. A missing dish in remaining carts prevents
+removal rather than returning an incorrect total after changing data.
+See [level 3 verification](BackendLevel3.md).

@@ -146,6 +146,15 @@
   "/guest/groups/{groupReservationId}/sessions/{guestSessionId}": {
     "DELETE": true
   },
+  "/reservations/{reservationId}/guest-session-id": {
+    "GET": true
+  },
+  "/group-reservations/{groupReservationId}/submit": {
+    "POST": true
+  },
+  "/guest/groups/{groupReservationId}/sessions": {
+    "GET": true
+  },
   "/guest/groups/{groupReservationId}/status": {
     "GET": false
   },
