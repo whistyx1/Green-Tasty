@@ -39,6 +39,8 @@ using APIHandler.Services.Auth;
 using APIHandler.Services.Dishes;
 using APIHandler.Services.Feedbacks;
 using APIHandler.Services.GroupReservations;
+using APIHandler.Services.GroupPreOrders;
+using APIHandler.Repositories.GroupPreOrders;
 using APIHandler.Services.GuestSessions;
 using APIHandler.Services.Locations;
 using APIHandler.Services.Notifications;
@@ -96,6 +98,8 @@ public static class RouteRegistry
         services.AddSingleton<IReportRepository, ReportRepository>();
         services.AddSingleton<IGuestSessionRepository, GuestSessionRepository>();
         services.AddSingleton<IGroupReservationRepository, GroupReservationRepository>();
+        services.AddSingleton<IGroupPreOrderRepository, GroupPreOrderRepository>();
+        services.AddSingleton<IGroupPreOrderService, GroupPreOrderService>();
         services.AddSingleton<ITableRepository, TableRepository>();
 
         // 3. Services
@@ -185,6 +189,9 @@ public static class RouteRegistry
         ];
 
         List<RouteHandler> GetGuestAndGroupRoutes() => [
+            new RouteHandler(new Route(HttpMethods.GET, "/reservations/{reservationId}/guest-session-id"), ActivatorUtilities.CreateInstance<GetOwnerSessionIdHandler>(provider)),
+            new RouteHandler(new Route(HttpMethods.POST, "/group-reservations/{groupReservationId}/submit"), ActivatorUtilities.CreateInstance<SubmitGroupPreOrderHandler>(provider)),
+            new RouteHandler(new Route(HttpMethods.GET, "/guest/groups/{groupReservationId}/sessions"), ActivatorUtilities.CreateInstance<GetGroupSessionsHandler>(provider)),
             new RouteHandler(new Route(HttpMethods.POST, "/guest/sessions"), ActivatorUtilities.CreateInstance<CreateGuestSessionHandler>(provider)),
             new RouteHandler(new Route(HttpMethods.GET, "/guest/sessions/{guestSessionId}"), ActivatorUtilities.CreateInstance<GetGuestSessionHandler>(provider)),
             new RouteHandler(new Route(HttpMethods.POST, "/guest/sessions/{guestSessionId}/dishes"), ActivatorUtilities.CreateInstance<AddDishToGuestSessionHandler>(provider)),

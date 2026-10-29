@@ -22,6 +22,11 @@ locals {
       },
       {
         Effect   = "Allow"
+        Action   = ["dynamodb:ConditionCheckItem"]
+        Resource = [aws_dynamodb_table.backend["Reservations"].arn, aws_dynamodb_table.backend["GuestSessions"].arn]
+      },
+      {
+        Effect   = "Allow"
         Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
         Resource = ["${aws_s3_bucket.images.arn}/*", "${aws_s3_bucket.profile_images.arn}/*"]
       },
