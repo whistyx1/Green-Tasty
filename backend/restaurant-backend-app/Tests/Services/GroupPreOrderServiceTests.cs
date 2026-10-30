@@ -153,6 +153,37 @@ public class GroupPreOrderServiceTests
         _persistence.VerifyNoOtherCalls();
     }
 
+    [Theory]
+    [InlineData(GroupReservationStatus.Open)]
+    [InlineData(GroupReservationStatus.Submitted)]
+    [InlineData(GroupReservationStatus.Closed)]
+    public async Task OwnerContext_ReturnsGroupIdWithoutParsingExistingOpaqueSessionId(GroupReservationStatus status)
+    {
+        _group.Status = status;
+        var owner = Session("legacy-random-session", false);
+        owner.IsOwnerSession = true;
+        owner.OwnerUserId = "owner";
+        _participants.Add(owner);
+
+        var result = await _service.GetOwnerSessionContextAsync("owner", "reservation");
+
+        Assert.Equal(new OwnerSessionContext("legacy-random-session", "group"), result);
+        _persistence.VerifyNoOtherCalls();
+        _orders.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task OwnerContext_BackfillsLegacyGroupAndReturnsStableContextWithoutChangingOrder()
+    {
+        var first = await _service.GetOwnerSessionContextAsync("owner", "reservation");
+        var repeated = await _service.GetOwnerSessionContextAsync("owner", "reservation");
+
+        Assert.Equal(new OwnerSessionContext("owner-group", "group"), first);
+        Assert.Equal(first, repeated);
+        _persistence.Verify(r => r.EnsureOwnerSessionAsync("group", "owner"), Times.Exactly(2));
+        _orders.VerifyNoOtherCalls();
+    }
+
     [Fact]
     public async Task OwnerLookup_OtherCustomerCannotReadOrCreateSession()
     {

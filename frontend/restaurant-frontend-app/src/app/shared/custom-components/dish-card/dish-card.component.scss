@@ -26,6 +26,18 @@
     max-height: 12.25rem;
   }
 
+  .dish-image--placeholder {
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    box-sizing: border-box;
+    background: color.$neutral-100;
+    color: color.$neutral-600;
+    text-align: center;
+    font-size: 0.875rem;
+    overflow-wrap: anywhere;
+  }
+
   .dish-info {
     width: 100%;
     display: flex;

@@ -80,30 +80,33 @@ describe('GeneralInformationComponent', () => {
     readerResults = new WeakMap();
     readerStates = new WeakMap();
 
-    // Control callbacks without reading or decoding real files.
-    spyOnProperty(FileReader.prototype, 'result', 'get')
-      .and.callFake(function (this: FileReader) {
-      return readerResults.get(this) ?? null;
-    });
-
-    spyOnProperty(FileReader.prototype, 'readyState', 'get')
-      .and.callFake(function (this: FileReader) {
-      return readerStates.get(this) ?? FileReader.EMPTY;
-    });
-
-    readSpy = spyOn(
-      FileReader.prototype,
-      'readAsDataURL',
-    ).and.callFake(function (this: FileReader) {
+    // Replace construction rather than spying on native read-only getters.
+    // Browser property descriptors vary; this keeps callbacks deterministic.
+    const nativeFileReader = window.FileReader;
+    readSpy = jasmine.createSpy('readAsDataURL').and.callFake(function (this: FileReader) {
       readers.push(this);
-      readerStates.set(this, FileReader.LOADING);
+      readerStates.set(this, nativeFileReader.LOADING);
     });
-
-    abortSpy = spyOn(
-      FileReader.prototype,
-      'abort',
-    ).and.callFake(function (this: FileReader) {
-      readerStates.set(this, FileReader.DONE);
+    abortSpy = jasmine.createSpy('abort').and.callFake(function (this: FileReader) {
+      readerStates.set(this, nativeFileReader.DONE);
+    });
+    const readerConstructor = spyOn(window, 'FileReader').and.callFake(function () {
+      const reader = {
+        onload: null,
+        onerror: null,
+        readAsDataURL: readSpy,
+        abort: abortSpy,
+      } as unknown as FileReader;
+      Object.defineProperties(reader, {
+        result: { get: () => readerResults.get(reader) ?? null },
+        readyState: { get: () => readerStates.get(reader) ?? nativeFileReader.EMPTY },
+      });
+      return reader;
+    });
+    Object.assign(readerConstructor, {
+      EMPTY: nativeFileReader.EMPTY,
+      LOADING: nativeFileReader.LOADING,
+      DONE: nativeFileReader.DONE,
     });
 
     spyOnProperty(

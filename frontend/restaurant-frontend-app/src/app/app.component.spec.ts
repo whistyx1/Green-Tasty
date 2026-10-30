@@ -1,3 +1,5 @@
+import { RouterOutlet } from '@angular/router';
+import { By } from '@angular/platform-browser';
 import { TestBed } from '@angular/core/testing';
 import { AppComponent } from './app.component';
 
@@ -20,10 +22,9 @@ describe('AppComponent', () => {
     expect(app.title).toEqual('restaurant-frontend-app');
   });
 
-  it('should render title', () => {
+  it('renders the application router outlet', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Hello, restaurant-frontend-app');
+    expect(fixture.debugElement.query(By.directive(RouterOutlet))).not.toBeNull();
   });
 });

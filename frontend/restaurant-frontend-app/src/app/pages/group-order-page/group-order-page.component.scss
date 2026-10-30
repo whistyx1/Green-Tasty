@@ -1,0 +1,264 @@
+@use '../../shared/styles/abstracts/colors' as color;
+
+:host {
+  display: block;
+  color: color.$neutral-900;
+}
+
+.group-order-page {
+  padding: 40px 24px 64px;
+  background: color.$neutral-0;
+}
+
+.review-panel {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 40px;
+  border: 1px solid color.$neutral-200;
+  border-radius: 24px;
+  background: color.$neutral-100;
+}
+
+.page-header {
+  padding-bottom: 20px;
+  border-bottom: 1px solid color.$sage-100;
+}
+
+.heading-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+}
+
+.group-status {
+  padding: 4px 12px;
+  border-radius: 6px;
+  background: color.$neutral-200;
+  font-size: 12px;
+}
+
+.reservation-details {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding: 0;
+  margin: 16px 0 0;
+  list-style: none;
+  font-size: 14px;
+  line-height: 1.5;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  img {
+    flex: 0 0 16px;
+  }
+}
+
+.participants {
+  display: grid;
+  gap: 24px;
+  padding: 0;
+  margin: 24px 0;
+  list-style: none;
+
+  > li {
+    min-width: 0;
+  }
+}
+
+.order-summary {
+  border-top: 2px solid color.$sage-100;
+  padding-top: 20px;
+}
+
+.grand-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 20px;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.4;
+
+  span:last-child {
+    color: color.$green-800;
+  }
+}
+
+.submit-button {
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 20px;
+  border: 0;
+  border-radius: 8px;
+  background: color.$green-gradient;
+  color: color.$neutral-0;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:disabled {
+    background: color.$neutral-200;
+    color: color.$neutral-600;
+    cursor: not-allowed;
+  }
+}
+
+.preview-note {
+  margin: 12px 0 0;
+  color: color.$neutral-600;
+  font-size: 12px;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .group-order-page {
+    padding: 24px 12px 40px;
+  }
+
+  .review-panel {
+    padding: 24px 16px;
+    border-radius: 16px;
+  }
+
+  .heading-row h1 {
+    font-size: 24px;
+  }
+
+  .reservation-details {
+    gap: 12px 16px;
+  }
+
+  .participants {
+    gap: 16px;
+    margin: 20px 0;
+  }
+
+  .grand-total {
+    font-size: 22px;
+  }
+}
+
+.group-status.sent {
+  background: color.$orange-30;
+}
+.screen-message,
+.sent-message {
+  margin: 20px 0;
+  color: color.$neutral-600;
+}
+.pending-warning {
+  margin: 24px 0;
+  padding: 16px;
+  border: 1px solid color.$orange-100;
+  border-radius: 8px;
+  background: color.$orange-30;
+  line-height: 1.6;
+}
+.consolidated-order {
+  padding: 24px;
+  margin-bottom: 24px;
+  border-radius: 16px;
+  background: color.$neutral-0;
+  h2 {
+    margin: 0 0 16px;
+    font-size: 18px;
+    font-weight: 600;
+  }
+}
+.consolidated-items {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  li {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid color.$neutral-100;
+    overflow-wrap: anywhere;
+  }
+  span:last-child {
+    flex-shrink: 0;
+  }
+}
+.submit-error {
+  color: color.$red-400;
+}
+.secondary-button {
+  min-height: 48px;
+  padding: 12px 20px;
+  border: 1px solid color.$green-800;
+  border-radius: 8px;
+  background: color.$neutral-0;
+  color: color.$green-800;
+  font: inherit;
+  cursor: pointer;
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+.submit-button:focus-visible,
+.secondary-button:focus-visible {
+  outline: 2px solid color.$green-800;
+  outline-offset: 3px;
+}
+.confirmation-total {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.confirmation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  width: 100%;
+  button {
+    flex: 1 1 120px;
+    width: auto;
+  }
+}
+@media (max-width: 600px) {
+  .consolidated-order {
+    padding: 20px 16px;
+  }
+}
+
+.sync-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+  font-size: 13px;
+
+  p {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.refresh-error {
+  color: color.$neutral-700;
+}

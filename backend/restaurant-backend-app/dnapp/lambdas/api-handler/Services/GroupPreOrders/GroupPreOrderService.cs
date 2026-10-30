@@ -21,6 +21,9 @@ public class GroupPreOrderService(
     IDishRepository dishes, IGroupPreOrderRepository persistence, TimeProvider? clock = null) : IGroupPreOrderService
 {
     public async Task<string> GetOwnerSessionIdAsync(string userId, string reservationId)
+        => (await GetOwnerSessionContextAsync(userId, reservationId)).GuestSessionId;
+
+    public async Task<OwnerSessionContext> GetOwnerSessionContextAsync(string userId, string reservationId)
     {
         var reservation = await LoadOwnedReservationAsync(userId, reservationId);
         var group = await groups.GetByReservationIdAsync(reservation.Id)
@@ -28,10 +31,11 @@ public class GroupPreOrderService(
         var existing = (await sessions.GetAllByGroupReservationIdAsync(group.GroupReservationId))
             .Where(s => s.IsOwnerSession && s.OwnerUserId == userId)
             .OrderBy(s => s.Id, StringComparer.Ordinal).FirstOrDefault();
-        if (existing != null) return existing.Id;
+        if (existing != null) return new OwnerSessionContext(existing.Id, group.GroupReservationId);
         if (group.Status != GroupReservationStatus.Open || reservation.Status != ReservationStatus.Reserved)
             throw new GroupPreOrderConflictException("An owner session cannot be created for an inactive group.");
-        return (await persistence.EnsureOwnerSessionAsync(group.GroupReservationId, userId)).Id;
+        var owner = await persistence.EnsureOwnerSessionAsync(group.GroupReservationId, userId);
+        return new OwnerSessionContext(owner.Id, group.GroupReservationId);
     }
 
     public async Task<IReadOnlyList<ConsolidatedDish>> SubmitAsync(string userId, string groupReservationId, string reservationId)

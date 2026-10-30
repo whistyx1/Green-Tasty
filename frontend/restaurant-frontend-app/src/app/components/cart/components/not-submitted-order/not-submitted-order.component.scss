@@ -98,3 +98,20 @@
   letter-spacing: 0;
   vertical-align: middle;
 }
+
+// Let long references and names wrap inside the cart instead of widening it.
+:host, .order, .container, .dish-name { min-width: 0; }
+.body-bold, .caption { overflow-wrap: anywhere; }
+.dish-image { flex: 0 0 96px; width: 96px; max-width: 96px; object-fit: cover; }
+.dish-image-placeholder {
+  display: grid;
+  place-items: center;
+  background: color.$neutral-100;
+  color: color.$neutral-600;
+  font-size: 12px;
+}
+@media (max-width: 480px) {
+  .order-item-dish { padding: 12px; flex-wrap: wrap; }
+  .container { flex: 1 1 180px; }
+  .quantity { flex-wrap: wrap; }
+}

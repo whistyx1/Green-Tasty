@@ -14,4 +14,6 @@ export interface WaiterPreOrderState {
   createdByName: string;
   createdByRole: string;
   tableName: string;
+  startTime?: string;
+  endTime?: string;
 }

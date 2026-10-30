@@ -5,6 +5,7 @@ import {
   computed,
   input,
   output,
+  signal,
 } from '@angular/core';
 
 import { Order } from '@app/models/orders/order.model';
@@ -19,6 +20,16 @@ import { Order } from '@app/models/orders/order.model';
 })
 export class NotSubmittedOrderComponent {
   readonly order = input.required<Order>();
+
+  private readonly failedImages = signal<ReadonlySet<string>>(new Set());
+
+  imageAvailable(dishId: string, imageUrl: string | null | undefined): boolean {
+    return !!imageUrl?.trim() && !this.failedImages().has(`${dishId}:${imageUrl}`);
+  }
+
+  onImageError(dishId: string, imageUrl: string | null | undefined): void {
+    this.failedImages.update((failed) => new Set([...failed, `${dishId}:${imageUrl}`]));
+  }
 
   readonly submitted = output<string>();
   readonly addDish = output<void>();

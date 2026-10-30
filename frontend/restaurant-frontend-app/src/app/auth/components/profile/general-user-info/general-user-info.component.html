@@ -18,7 +18,7 @@
     <input
       #fileInput
       type="file"
-      accept="image/*"
+      accept="image/jpeg,image/png,image/webp"
       hidden
       (change)="onFileSelected($event)"
     />
@@ -92,7 +92,7 @@
       <button
         type="submit"
         class="button button--primary button--large save-button"
-        [disabled]="userForm.invalid"
+        [disabled]="userForm.invalid || isSaving() || isReadingPhoto()"
       >
         Save Changes
       </button>

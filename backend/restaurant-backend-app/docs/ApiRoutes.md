@@ -557,14 +557,19 @@ Response: `200 OK`
 ### `GET` /reservations/{reservationId}/guest-session-id
 Requires the reservation Owner's Cognito ID token. Returns a stable Owner
 session ID and creates empty session metadata if it is missing (including older
-bookings). The ID is not a guest bearer token. See [level 2](BackendLevel2.md).
+bookings). The ID is not a guest bearer token. The additive `groupReservationId`
+field supports stable Owner bootstrap even when invitation lookup is unavailable;
+never parse the session ID to infer a group. Existing clients reading only
+`guestSessionId` remain compatible. See [level 2](BackendLevel2.md) and
+[frontend level 3](../../../docs/epam-homework/FrontendLevel3.md).
 Errors: 401 anonymous, 403 non-owner, 404 reservation/group missing, 409 inactive
 group when a new session would be needed.
 
 Response: `200 OK`
 ```json
 {
-  "guestSessionId": "string"
+  "guestSessionId": "string",
+  "groupReservationId": "string"
 }
 ```
 

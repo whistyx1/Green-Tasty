@@ -1,4 +1,4 @@
-import {Component, ChangeDetectionStrategy, input, output, computed} from '@angular/core';
+import {Component, ChangeDetectionStrategy, input, output, computed, signal} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DishListResponse } from '@app/models/dishes/dish-list-response.model';
 import { DishState } from '@app/models/enums/dish-state.model';
@@ -20,6 +20,18 @@ export class DishCardComponent {
 
   readonly dishClicked = output<void>();
   readonly preOrderClicked = output<void>();
+
+  private readonly failedImageKey = signal<string | null>(null);
+  readonly imageUrl = computed(() => {
+    const dish = this.dish();
+    const imageUrl = dish.imageUrl?.trim();
+    return imageUrl && this.failedImageKey() !== `${dish.id}:${imageUrl}` ? imageUrl : null;
+  });
+
+  onImageError(): void {
+    const dish = this.dish();
+    this.failedImageKey.set(`${dish.id}:${dish.imageUrl?.trim()}`);
+  }
 
   readonly dishStateLabel = computed(() => {
     const state = this.dish().state;

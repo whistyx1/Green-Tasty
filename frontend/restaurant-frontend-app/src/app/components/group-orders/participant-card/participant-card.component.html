@@ -1,0 +1,57 @@
+<article class="participant-card" [attr.aria-labelledby]="'participant-title-' + participant().id">
+  <header class="card-header">
+    <h2 [id]="'participant-title-' + participant().id">{{ title() }}</h2>
+    <span class="status" [class.submitted]="participant().isSubmitted">
+      {{ cartStatus() }}
+    </span>
+    @if (canRemove() && participant().type === 'Guest') {
+      <button
+        class="remove-guest"
+        type="button"
+        [attr.aria-label]="'Remove ' + participant().name"
+        (click)="removeClick.emit(participant())"
+      >
+        Remove Guest
+      </button>
+    }
+  </header>
+
+  @if (items().length) {
+    <ul class="dish-list" aria-label="Selected dishes">
+      @for (item of items(); track item.dish.id) {
+        <li class="dish-row">
+          @if (item.showImage) {
+            <img
+              class="avatar"
+              [src]="item.dish.imageUrl"
+              alt=""
+              width="40"
+              height="40"
+              loading="lazy"
+              (error)="imageFailed(item.dish)"
+            />
+          } @else {
+            <span class="avatar initial" aria-hidden="true">{{ item.initial }}</span>
+          }
+          <span class="dish-name">{{ item.dish.name }}</span>
+          <span class="quantity" [attr.aria-label]="'Quantity: ' + item.quantity"
+            >× {{ item.quantity }}</span
+          >
+          <span class="price">{{ item.dish.price * item.quantity | currency }}</span>
+        </li>
+      }
+    </ul>
+  } @else {
+    <p class="empty-cart">
+      {{
+        ownerOrderFinalized()
+          ? 'Your pre-order is included in the final consolidated order below.'
+          : 'No dishes yet'
+      }}
+    </p>
+  }
+
+  <p class="subtotal">
+    <span>Subtotal</span><span>{{ participant().total | currency }}</span>
+  </p>
+</article>
