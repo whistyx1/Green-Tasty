@@ -12,7 +12,7 @@ public class GetOwnerSessionIdHandler(IGroupPreOrderService service) : IApiReque
 {
     public Task<APIGatewayProxyResponse> HandleRequest(APIGatewayProxyRequest request, ILambdaContext context)
         => GroupPreOrderHandler.HandleAsync(request, context, "reservationId", async (userId, reservationId) =>
-            new { GuestSessionId = await service.GetOwnerSessionIdAsync(userId, reservationId) });
+            await service.GetOwnerSessionContextAsync(userId, reservationId));
 }
 
 public class SubmitGroupPreOrderHandler(IGroupPreOrderService service) : IApiRequestHandler

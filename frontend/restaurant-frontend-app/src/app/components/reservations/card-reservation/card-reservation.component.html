@@ -133,6 +133,12 @@
           Cancel
         </button>
 
+        @if (role() === Roles.CUSTOMER && r().guestCount > 1) {
+          <button type="button" class="button button--secondary button--large" (click)="onGroupPreOrder()">
+            Group Pre-Order
+          </button>
+        }
+
         @if (role() === Roles.CUSTOMER) {
           <button
             type="button"

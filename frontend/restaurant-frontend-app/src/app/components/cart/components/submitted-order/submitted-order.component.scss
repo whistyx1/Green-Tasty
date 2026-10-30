@@ -48,3 +48,13 @@
   letter-spacing: 0;
   vertical-align: middle;
 }
+
+:host, .text { min-width: 0; }
+.body, .body-bold { overflow-wrap: anywhere; }
+.order-item { gap: 12px; }
+.order-item > :first-child { min-width: 0; }
+.order-item > :last-child { flex-shrink: 0; }
+.actions { flex-wrap: wrap; }
+@media (max-width: 480px) {
+  .actions > button { width: 100%; }
+}

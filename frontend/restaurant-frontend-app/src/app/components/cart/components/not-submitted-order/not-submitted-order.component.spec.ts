@@ -22,6 +22,7 @@ describe('NotSubmittedOrderComponent', () => {
         quantity: 2,
         dish: {
           id: 'dish-1',
+          name: 'Test dish',
           price: 10,
         },
       },
@@ -60,4 +61,34 @@ describe('NotSubmittedOrderComponent', () => {
   it('should calculate the total price', () => {
     expect(component.totalPrice()).toBe(20);
   });
+  it('shows a placeholder instead of a missing image request', () => {
+    expect(fixture.nativeElement.querySelector('.dish-image-placeholder').getAttribute('aria-label'))
+      .toBe('Test dish: image unavailable');
+    expect(fixture.nativeElement.querySelector('img.dish-image')).toBeNull();
+  });
+
+  it('replaces a failed image and recovers when its URL changes', () => {
+    const withImage = {
+      ...order,
+      orderItems: [{ ...order.orderItems[0], dish: {
+        ...order.orderItems[0].dish, name: 'Salad', imageUrl: '/salad.jpg',
+      } }],
+    };
+    fixture.componentRef.setInput('order', withImage);
+    fixture.detectChanges();
+    const image: HTMLImageElement = fixture.nativeElement.querySelector('img.dish-image');
+    expect(image.getAttribute('src')).toBe('/salad.jpg');
+    image.dispatchEvent(new Event('error'));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('img.dish-image')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.dish-image-placeholder').getAttribute('aria-label'))
+      .toBe('Salad: image unavailable');
+    fixture.componentRef.setInput('order', { ...withImage, orderItems: [{
+      ...withImage.orderItems[0], dish: { ...withImage.orderItems[0].dish, imageUrl: '/replacement.jpg' },
+    }] });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('img.dish-image').getAttribute('src'))
+      .toBe('/replacement.jpg');
+  });
+
 });

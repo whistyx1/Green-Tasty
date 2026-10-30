@@ -100,7 +100,8 @@ must not change submission, editing, cancellation, or order selection behavior.
 
 ## FE-005 — Waiter preorder image overflow and Cancel button layout
 
-**Type:** Layout bug. **Status:** Reported during level 2; reproduction pending.
+**Type:** Layout bug. **Status:** Visually confirmed in the supplied real API
+acceptance screenshot on 2026-10-30; implementation fix pending.
 
 After group submission, the assigned Waiter opened the preorder and saw the
 expected three demo salads, but reported an image extending outside its borders
@@ -114,7 +115,62 @@ confirmation/cancellation behavior and verify against the homework design.
 
 **Starting point:** `pages/waiter-pre-order-page/` and its dish/action components.
 
+**Evidence:** [Waiter preorder screenshot](../../../docs/epam-homework/screenshots/frontend-level3/waiter-preorder-layout.png).
+The missing image renders clipped alternative text inside a large circular image
+area. Cancel has overlapping green/outline layers and poor text contrast. Source
+inspection shows styling on both the custom-button host and its inner button,
+including deep selectors; this is a likely contributor, not a tested root cause.
+The displayed Quantity: 3 is correct. No image/button fix has been made.
+
 ## Current work
 
-Continue backend level-two manual acceptance first. Return to these items during
-the frontend phase; keep any fixes separate from unrelated backend homework.
+Frontend homework levels 1–3 and the Remove Guest bonus are complete, with real
+API acceptance documented. These broader UI fixes remain separate and pending;
+the updated frontend has not been published to AWS.
+
+## FE-006 — Shared header navigation spacing at narrower desktop widths
+
+**Type:** Layout issue. **Status:** Observed in supplied level 3 screenshot;
+viewport reproduction pending.
+
+The Sent to Restaurant screenshot shows Main page and Book a Table touching in
+the shared header. Their spacing is distinct in the Open overview screenshot.
+Record exact viewport/zoom when reproducing, preserve keyboard/navigation
+behavior, and adjust the existing header's responsive spacing without global
+changes to the Owner page. This is not evidence that the group-order data flow
+failed. Reference:
+`docs/epam-homework/screenshots/frontend-level3/sent-to-restaurant.png`.
+
+## FE-007 — Waiter preorder loses the reservation's table label
+
+**Type:** Presentation/data-mapping bug. **Status:** Visually confirmed; fix pending.
+
+The reservation card shows Table 1, but opening its preorder produces
+`Table Unknown table`. Compare the
+[reservation screenshot](../../../docs/epam-homework/screenshots/frontend-level3/waiter-reservations.png)
+with the [preorder screenshot](../../../docs/epam-homework/screenshots/frontend-level3/waiter-preorder-layout.png).
+Check the selected table label, navigation state, and reload behavior before
+changing the mapping. Preserve the table ID internally; show a useful label
+without duplicating the word Table in fallback text.
+
+## FE-008 — Reservation and Waiter preorder time presentation differs
+
+**Type:** Timezone presentation issue. **Status:** Visually confirmed; fix pending.
+
+For the same booking, the reservation card shows 10:30 AM–12:00 PM while the
+preorder heading shows 8:30 AM–10:00 AM. A two-hour timezone conversion can
+explain the difference; the screenshots do not demonstrate corrupt stored times.
+Choose the existing product's display-timezone policy, apply it consistently,
+and label the timezone when necessary. Cover date/daylight-saving boundaries
+without altering the reservation's stored UTC timestamps. Evidence: the two
+Waiter screenshots linked in FE-007.
+
+## Display cleanup — 2026-10-30
+
+FE-003/004/005/006/007/008 have focused frontend implementations in version
+1.1.5; final browser recheck is pending. FE-001 received a narrow-screen stacking
+fix, but its original reported overflow has not been reproduced. FE-002 remains
+unimplemented. Earlier descriptions/screenshots above are pre-fix evidence,
+not the current implementation status. See
+[display fix record](../../../docs/epam-homework/FrontendUiFixes.md) for delegation,
+verification limits, and the single remaining visual check.

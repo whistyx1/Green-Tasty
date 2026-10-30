@@ -5,7 +5,7 @@
 </nav>
 
 <h2 class="title">
-  Pre-order of {{ createdByRole.toLowerCase() }} {{ createdByName }}, Table {{ tableName }} ({{
+  Pre-order of {{ createdByRole.toLowerCase() }} {{ createdByName }}, {{ tableName }} ({{
     reservationTime
   }})
 </h2>
@@ -21,6 +21,9 @@
         <div class="preorder-actions">
           <app-custom-button
             class="btn-cancel"
+            variant="secondary"
+            size="large"
+            fullWidth
             (click)="rejectDish(item.dish.id)"
             [disabled]="item.state === 2"
           >
@@ -28,6 +31,8 @@
           </app-custom-button>
           <app-custom-button
             class="btn-confirm"
+            size="large"
+            fullWidth
             (click)="confirmDish(item.dish.id)"
             [disabled]="item.state === 1"
           >

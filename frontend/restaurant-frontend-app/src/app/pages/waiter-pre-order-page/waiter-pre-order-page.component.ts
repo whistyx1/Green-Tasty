@@ -28,7 +28,7 @@ export class WaiterPreOrderPageComponent implements OnInit {
   reservationId = '';
   createdByName = '';
   createdByRole = '';
-  tableName = '';
+  tableName = 'Table unavailable';
   reservationTime = '';
   @Input() customClass = '';
 
@@ -42,38 +42,70 @@ export class WaiterPreOrderPageComponent implements OnInit {
     const navState = this.router.getCurrentNavigation()?.extras.state as
       | WaiterPreOrderState
       | undefined;
-    let data = navState;
+    const historyState = history.state as WaiterPreOrderState | undefined;
+    let data = navState?.reservationId ? navState : historyState;
 
     if (!data?.reservationId) {
       const stored = sessionStorage.getItem('waiterPreOrderData');
       if (stored) {
-        data = JSON.parse(stored);
-        console.log('data', data);
+        try {
+          data = JSON.parse(stored) as WaiterPreOrderState;
+        } catch {
+          sessionStorage.removeItem('waiterPreOrderData');
+        }
       }
     }
 
-    if (!data?.reservationId) {
+    if (typeof data?.reservationId !== 'string' || !data.reservationId.trim()) {
       console.warn('Reservation ID not found');
       return;
     }
 
-    this.createdByName = data.createdByName;
-    this.createdByRole = data.createdByRole;
-    this.tableName = data.tableName;
+    this.createdByName = data.createdByName ?? '';
+    this.createdByRole = data.createdByRole ?? '';
+    const tableLabel = data.tableName?.trim();
+    this.tableName = !tableLabel || /unknown|unavailable/i.test(tableLabel)
+      ? 'Table unavailable'
+      : /^table\b/i.test(tableLabel) ? tableLabel : `Table ${tableLabel}`;
+    this.reservationTime = this.formatLocalReservationTime(data.startTime, data.endTime);
     this.reservationId = data.reservationId;
 
     firstValueFrom(this.preOrdersService.getByReservationId(data.reservationId))
       .then((order) => {
-        console.log('order', order);
-        console.log('ORDER FROM SERVER:', JSON.stringify(order, null, 2));
-
         this.orderItems = order.orderItems ?? [];
-        this.reservationTime = order.reservationTime || '';
-        // this.refreshOrder();
+        // Older saved navigation has no ISO timestamps. The API's human-readable
+        // range is UTC: label it explicitly rather than parsing or shifting it.
+        if (!this.reservationTime) {
+          this.reservationTime = order.reservationTime
+            ? `${order.reservationTime} UTC`
+            : 'Time unavailable';
+        }
       })
       .catch((err) => {
         console.error('Error loading order:', err);
       });
+  }
+
+  private formatLocalReservationTime(startTime?: string, endTime?: string): string {
+    if (!startTime || !endTime) {
+      return '';
+    }
+    const startDate = new Date(startTime);
+    const endDate = new Date(endTime);
+    if (!Number.isFinite(startDate.getTime()) || !Number.isFinite(endDate.getTime())) {
+      return '';
+    }
+    // Match the booking card's browser-local short times. Include both dates
+    // across midnight and a timezone label so the presentation is unambiguous.
+    const dateFormatter = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' });
+    const timeFormatter = new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+    });
+    const startLabel = `${dateFormatter.format(startDate)}, ${timeFormatter.format(startDate)}`;
+    const endLabel = dateFormatter.format(startDate) === dateFormatter.format(endDate)
+      ? timeFormatter.format(endDate)
+      : `${dateFormatter.format(endDate)}, ${timeFormatter.format(endDate)}`;
+    return `${startLabel} – ${endLabel}`;
   }
 
   onRemove(dishId: string) {

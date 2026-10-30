@@ -17,12 +17,14 @@ export const tokenInterceptor: HttpInterceptorFn = (
 ) => {
   const toastr = inject(ToastService);
 
-  // IMPORTANT: do not modify Guest endpoints at all.
-  // Guest flow uses a different token (guest session token) and we must not touch the body.
-  // Otherwise we break POST /guest/sessions payload.
-  if (req.url.includes('/guest/')) {
+  // Owner group routes use Cognito; guest-session/invite routes keep their
+  // explicit guest token and unchanged request body.
+  const path = req.url.split(/[?#]/)[0];
+  const ownerGroupRequest = /\/guest\/groups\/[^/]+\/(?:sessions(?:\/[^/]+)?|status)\/?$/.test(path);
+  if (req.url.includes('/guest/') && !ownerGroupRequest) {
     return next(req).pipe(
       catchError((error: HttpErrorResponse) => {
+        if (req.context.get(SKIP_ERROR_TOAST)) return throwError(() => error);
         console.log(error);
 
         let errorMessage = 'An unexpected error occurred.';
@@ -81,14 +83,11 @@ export const tokenInterceptor: HttpInterceptorFn = (
 
   return next(clonedRequest).pipe(
     catchError((error: HttpErrorResponse) => {
+      if (clonedRequest.context.get(SKIP_ERROR_TOAST)) return throwError(() => error);
       console.log(error);
       const errorMessage = getServerErrorMessage(error) || 'An unexpected error occurred.';
 
       if (clonedRequest.url.includes('orders') && error.status === 404) {
-        return throwError(() => error);
-      }
-
-      if (clonedRequest.context.get(SKIP_ERROR_TOAST)) {
         return throwError(() => error);
       }
 

@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 import { Params, Router } from '@angular/router';
 
+import { WaiterPreOrderState } from '@app/models/orders/order.model';
 import { CreateOrderRequest } from '@app/models/cart/create-order-request.model';
 import {
   ReservationCustomer,
@@ -22,13 +23,6 @@ import { CustomSelectComponent } from '@app/shared/custom-components/custom-sele
 interface ReservationStatusView {
   class: string;
   label: string;
-}
-
-interface WaiterPreOrderNavigationData {
-  reservationId: string;
-  createdByName: string;
-  createdByRole: string;
-  tableName: string;
 }
 
 @Component({
@@ -93,6 +87,10 @@ export class CardReservationComponent {
 
   readonly preOrder = output<CreateOrderRequest>();
   readonly showWaiterOrderModal = signal(false);
+
+  onGroupPreOrder(): void {
+    void this.router.navigate(['/reservations', this.r().id, 'group-order']);
+  }
 
   readonly statusView = computed<ReservationStatusView>(() => {
     const reservation = this.r();
@@ -220,11 +218,13 @@ export class CardReservationComponent {
   private navigateToWaiterPreOrder(): void {
     const reservation = this.r();
 
-    const navigationData: WaiterPreOrderNavigationData = {
+    const navigationData: WaiterPreOrderState = {
       reservationId: reservation.id,
       createdByName: this.creatorName(),
       createdByRole: this.creatorRole(),
-      tableName: reservation.tableName || 'Unknown table',
+      tableName: this.selectedTableLabel() || reservation.tableName || 'Table unavailable',
+      startTime: new Date(reservation.startTime).toISOString(),
+      endTime: new Date(reservation.endTime).toISOString(),
     };
 
     sessionStorage.setItem(

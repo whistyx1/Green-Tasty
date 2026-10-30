@@ -13,12 +13,35 @@ public class GroupPreOrderHandlerTests
     private readonly ILambdaContext _context = Mock.Of<ILambdaContext>(c => c.Logger == Mock.Of<ILambdaLogger>());
 
     [Fact]
-    public async Task Lookup_ReturnsCamelCaseSessionId()
+    public async Task Lookup_ReturnsExistingSessionIdAndAdditiveGroupIdInCamelCase()
     {
-        _service.Setup(s => s.GetOwnerSessionIdAsync("owner", "reservation")).ReturnsAsync("owner-session");
+        _service.Setup(s => s.GetOwnerSessionContextAsync("owner", "reservation"))
+            .ReturnsAsync(new OwnerSessionContext("opaque-owner-session", "group"));
         var response = await new GetOwnerSessionIdHandler(_service.Object).HandleRequest(Request(), _context);
         Assert.Equal(200, response.StatusCode);
-        Assert.Equal("{\"guestSessionId\":\"owner-session\"}", response.Body);
+        using var body = JsonDocument.Parse(response.Body);
+        Assert.Equal("opaque-owner-session", body.RootElement.GetProperty("guestSessionId").GetString());
+        Assert.Equal("group", body.RootElement.GetProperty("groupReservationId").GetString());
+        Assert.Equal(2, body.RootElement.EnumerateObject().Count());
+    }
+
+    [Theory]
+    [InlineData("forbidden", 403)]
+    [InlineData("reservation", 404)]
+    [InlineData("group", 404)]
+    [InlineData("inactive", 409)]
+    public async Task Lookup_ContextFailuresPreserveHttpContract(string scenario, int expectedStatus)
+    {
+        Exception error = scenario switch {
+            "forbidden" => new ActionForbiddenException("Forbidden"),
+            "reservation" => new ReservationNotFoundException("Reservation not found"),
+            "group" => new GroupReservationNotFoundException(),
+            _ => new GroupPreOrderConflictException("Inactive") };
+        _service.Setup(s => s.GetOwnerSessionContextAsync("owner", "reservation")).ThrowsAsync(error);
+        var response = await new GetOwnerSessionIdHandler(_service.Object).HandleRequest(Request(), _context);
+        Assert.Equal(expectedStatus, response.StatusCode);
+        Assert.DoesNotContain("guestSessionId", response.Body);
+        Assert.DoesNotContain("groupReservationId", response.Body);
     }
 
     [Fact]

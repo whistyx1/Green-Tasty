@@ -6,7 +6,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const BUNDLE_DIR = resolve('dist/restaurant-frontend-app/browser');
-const FORBIDDEN = ['BACKEND_URL_PLACEHOLDER'];
+const FORBIDDEN = ['BACKEND_URL_PLACEHOLDER', 'green-and-tasty-demo', 'owner@demo.test'];
 
 function walk(dir) {
   return readdirSync(dir).flatMap((entry) => {
@@ -28,8 +28,8 @@ for (const file of walk(BUNDLE_DIR).filter((f) => /\.(js|css|html)$/.test(f))) {
 }
 
 if (failed) {
-  console.error('\nBundle is not deployable: configuration placeholders were not substituted.');
+  console.error('\nBundle is not deployable: configuration placeholders or development demo code were found.');
   process.exit(1);
 }
 
-console.log('Bundle check passed: no configuration placeholders left.');
+console.log('Bundle check passed: no configuration placeholders or development demo markers.');

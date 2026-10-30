@@ -9,13 +9,21 @@
       <div class="order-item">
         @for (item of order().orderItems; track item.dish.id) {
         <div class="order-item-dish">
+          @if (imageAvailable(item.dish.id, item.dish.imageUrl)) {
           <img
             class="dish-image"
             [src]="item.dish.imageUrl"
             [alt]="item.dish.name"
+            (error)="onImageError(item.dish.id, item.dish.imageUrl)"
             width="96"
             height="96"
           />
+          } @else {
+            <div class="dish-image dish-image-placeholder" role="img"
+              [attr.aria-label]="item.dish.name + ': image unavailable'">
+              <span aria-hidden="true">No image</span>
+            </div>
+          }
 
           <div class="container">
             <div class="details">

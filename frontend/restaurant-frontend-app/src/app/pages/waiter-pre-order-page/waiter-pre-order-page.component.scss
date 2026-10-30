@@ -4,7 +4,6 @@
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  //justify-content: center;
   padding: 1rem 2.5rem;
   gap: 1.5rem;
 
@@ -16,6 +15,8 @@
 .pre-order-dish {
   display: flex;
   flex-direction: column;
+  width: min(100%, 20rem);
+  min-width: 0;
 }
 
 .title {
@@ -23,6 +24,7 @@
   line-height: 2rem;
   padding: 1rem 2.5rem;
   color: color.$neutral-600;
+  overflow-wrap: anywhere;
 }
 
 .breadcrumb {
@@ -58,37 +60,15 @@
 }
 
 .preorder-actions {
-  // width: 16.75;
-  width: 90%;
-  height: 2.5rem;
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  padding: 0 1rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
   gap: 1rem;
-  justify-content: center;
 }
 
 .btn-cancel,
 .btn-confirm {
-  width: 126px;
-}
-
-.btn-cancel {
-  align-self: flex-start;
-  border: 1px solid color.$green-600;
-  border-radius: 0.5rem;
-  height: 2.5rem;
-  font-weight: 600;
-  line-height: 1.5rem;
-  font-size: 0.875rem;
-  color: color.$green-600;
-  text-align: center;
-  cursor: pointer;
-}
-
-::ng-deep .preorder-list app-dish-card [dish-footer] app-custom-button ::ng-deep button {
-  height: 2.5rem;
+  min-width: 0;
 }
 
 .pre-order-footer {
@@ -97,39 +77,19 @@
   width: 100%;
 }
 
-::ng-deep app-custom-button.btn-cancel > .custom-button {
-  // height: 2.5rem;
-  background-color: color.$neutral-0;
-  color: color.$green-600;
-  border: 1px solid color.$green-600;
-  align-self: flex-start;
-  border-radius: 0.5rem;
-  height: 2.5rem;
-  font-weight: 600;
-  line-height: 1.5rem;
-  font-size: 0.875rem;
-  text-align: center;
-  cursor: pointer;
-
-  &:disabled {
-    color: color.$neutral-0;
-    cursor: not-allowed;
-    border: 1px solid color.$neutral-200;
-  }
-}
-
-::ng-deep .preorder-list app-dish-card a .dish-info .dish-meta {
-  width: 90%;
-  background-color: aqua;
-}
-::ng-deep .preorder-list app-dish-card a {
-  //  padding-bottom: 0;
-  //  background-color: bisque;
-}
-
 .pre-order-quantity {
-  position: relative;
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 1rem;
+}
+
+@media (max-width: 480px) {
+  .preorder-list,
+  .title {
+    padding: 1rem;
+  }
+
+  .breadcrumb {
+    margin-left: 1rem;
+  }
 }
