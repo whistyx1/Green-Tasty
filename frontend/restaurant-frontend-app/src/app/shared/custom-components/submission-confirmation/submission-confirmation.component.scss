@@ -1,0 +1,28 @@
+.submission-items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 12px;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    overflow-wrap: anywhere;
+
+    span { min-width: 0; }
+  }
+}
+
+.submission-total, .submission-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.submission-actions {
+  flex-wrap: wrap;
+
+  button { flex: 1 1 120px; }
+}

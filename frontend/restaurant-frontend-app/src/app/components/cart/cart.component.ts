@@ -13,6 +13,7 @@ import { Router } from '@angular/router';
 
 import { Order } from '@app/models/orders/order.model';
 import { PreOrdersService } from '@app/services/pre-orders/pre-orders.service';
+import { SubmissionConfirmationComponent, SubmissionItem } from '@app/shared/custom-components/submission-confirmation/submission-confirmation.component';
 
 import { CancelOrderModalComponent } from './components/cancel-order-modal/cancel-order-modal.component';
 import { NotSubmittedOrderComponent } from './components/not-submitted-order/not-submitted-order.component';
@@ -27,6 +28,7 @@ import { SubmittedOrderComponent } from './components/submitted-order/submitted-
     NotSubmittedOrderComponent,
     CancelOrderModalComponent,
     SubmitOrderModalComponent,
+    SubmissionConfirmationComponent,
   ],
   templateUrl: './cart.component.html',
   styleUrl: './cart.component.scss',
@@ -45,6 +47,19 @@ export class CartComponent implements OnInit {
 
   readonly cancelOrderId = signal<string | null>(null);
   readonly submitOrderId = signal<string | null>(null);
+  readonly pendingOrderId = signal<string | null>(null);
+  readonly submitting = signal(false);
+  readonly submissionError = signal('');
+  readonly pendingOrder = computed(() => this.orders().find(
+    order => order.orderId === this.pendingOrderId() && order.status === 0
+  ));
+  readonly pendingItems = computed<SubmissionItem[]>(() =>
+    this.pendingOrder()?.orderItems.map(item => ({
+      name: item.dish.name,
+      quantity: item.quantity,
+      unitPrice: item.dish.price,
+    })) ?? []
+  );
 
   readonly submittedOrders = computed(() =>
     this.orders().filter(
@@ -153,26 +168,38 @@ export class CartComponent implements OnInit {
       });
   }
 
-  submitOrder(orderId: string): void {
-    const order = this.findOrder(orderId);
+  openSubmission(orderId: string): void {
+    const order = this.orders().find(item => item.orderId === orderId && item.status === 0);
+    if (!order || !order.orderItems.length || this.submitting()) return;
+    this.submissionError.set('');
+    this.pendingOrderId.set(orderId);
+  }
 
-    if (!order) {
-      return;
-    }
+  closeSubmission(): void {
+    if (!this.submitting()) this.pendingOrderId.set(null);
+  }
 
+  submitOrder(): void {
+    const order = this.pendingOrder();
+    if (!order || !order.orderItems.length || this.submitting()) return;
+    const orderId = order.orderId;
+    this.submitting.set(true);
+    this.submissionError.set('');
     this.preOrdersService
       .submitPreOrderByReservationId(order.reservationId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
+          this.pendingOrderId.set(null);
           this.submitOrderId.set(orderId);
+          this.submitting.set(false);
           this.loadOrders();
         },
-        error: (error) => {
-          console.error(
-            `Error submitting order ${orderId}:`,
-            error,
-          );
+        error: () => {
+          this.pendingOrderId.set(null);
+          this.submitting.set(false);
+          this.submissionError.set('Could not submit this pre-order. Please review it and try again.');
+          this.loadOrders();
         },
       });
   }

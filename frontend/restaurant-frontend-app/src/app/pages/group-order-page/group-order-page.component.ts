@@ -23,12 +23,13 @@ import { GuestInvite } from '@app/models/reservations/guest-invite.model';
 import { GroupOrdersService } from '@app/services/group-orders/group-orders.service';
 import { ToastService } from '@app/services/toast/toast.service';
 import { ModalComponent } from '@app/shared/custom-components/modal/modal.component';
+import { SubmissionConfirmationComponent, SubmissionItem } from '@app/shared/custom-components/submission-confirmation/submission-confirmation.component';
 import { consolidatePreOrder } from '@app/shared/helpers/consolidate-pre-order';
 import { getServerErrorMessage } from '@app/shared/helpers/http-error-helpers';
 
 @Component({
   selector: 'app-group-order-page',
-  imports: [CurrencyPipe, DatePipe, CdkTrapFocus, ParticipantCardComponent, ModalComponent],
+  imports: [CurrencyPipe, DatePipe, CdkTrapFocus, ParticipantCardComponent, ModalComponent, SubmissionConfirmationComponent],
   templateUrl: './group-order-page.component.html',
   styleUrl: './group-order-page.component.scss',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -109,6 +110,13 @@ export class GroupOrderPageComponent implements OnInit {
       : this.rawParticipants();
     return consolidatePreOrder(included);
   });
+  readonly confirmationItems = computed<SubmissionItem[]>(() =>
+    this.consolidated().items.map(item => ({
+      name: item.dish.name,
+      quantity: item.quantity,
+      unitPrice: item.dish.price,
+    }))
+  );
   readonly status = computed(() => this.groupStatus()?.status ?? 'Open');
   readonly statusLabel = computed(() => {
     switch (this.status()) {

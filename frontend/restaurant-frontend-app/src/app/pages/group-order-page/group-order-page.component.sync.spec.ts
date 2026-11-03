@@ -101,7 +101,7 @@ describe('Рівень 3 · синхронізація', () => {
     const { fixture, element } = create();
     buttonByText(element, 'Submit Pre-Order')?.click();
     fixture.detectChanges();
-    buttonByText(element.querySelector('[role="dialog"]')!, 'Submit')?.click();
+    buttonByText(element.querySelector('[role="dialog"]')!, 'Confirm')?.click();
     fixture.detectChanges();
 
     tick(SYNC_MS * 3);

@@ -148,32 +148,9 @@
   </section>
 </main>
 @if (confirmationOpen()) {
-  <app-modal
-    title="Submit Pre-Order"
-    width="520px"
-    [closeOnBackdrop]="!submitting()"
-    (closed)="closeConfirmation()"
-    cdkTrapFocus
-    [cdkTrapFocusAutoCapture]="true"
-  >
-    <p>Send the consolidated pre-order to the restaurant? Only submitted carts will be included.</p>
-    <p class="confirmation-total">
-      Grand Total <strong>{{ consolidated().total | currency }}</strong>
-    </p>
-    <div modal-actions class="confirmation-actions">
-      <button
-        class="secondary-button"
-        type="button"
-        [disabled]="submitting()"
-        (click)="closeConfirmation()"
-      >
-        Cancel
-      </button>
-      <button class="submit-button" type="button" [disabled]="submitting()" (click)="submit()">
-        {{ submitting() ? 'Submitting…' : 'Submit' }}
-      </button>
-    </div>
-  </app-modal>
+  <app-submission-confirmation kind="group" [items]="confirmationItems()" [busy]="submitting()"
+    [pendingGuests]="pendingCount()"
+    (closed)="closeConfirmation()" (confirmed)="submit()" />
 }
 
 @if (removeTarget(); as target) {

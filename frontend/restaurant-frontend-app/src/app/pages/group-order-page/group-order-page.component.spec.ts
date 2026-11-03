@@ -118,6 +118,17 @@ describe('Рівень 2 · сторінка Owner Review', () => {
   });
 
   describe('Submit Pre-Order', () => {
+    it('confirmation lists only included dishes and their consolidated total', () => {
+      const { fixture, element } = create();
+      buttonByText(element, 'Submit Pre-Order')?.click();
+      fixture.detectChanges();
+      const text = element.querySelector('[role="dialog"]')?.textContent ?? '';
+      expect(text).toContain('Caesar Salad × 3');
+      expect(text).toContain('$540.00');
+      expect(text).not.toContain('Tom Yum');
+      expect(text).toContain('finalizes the group order');
+    });
+
     it('кнопка неактивна, якщо ніхто не підтвердив кошик', () => {
       const nobody = structuredClone(SESSIONS);
       nobody.participants.forEach((p) => (p.isSubmitted = false));
@@ -135,9 +146,9 @@ describe('Рівень 2 · сторінка Owner Review', () => {
       const dialog = element.querySelector('[role="dialog"]');
       expect(dialog).withContext('має відкритись <app-modal>').not.toBeNull();
 
-      buttonByText(dialog!, 'Submit')?.click();
+      buttonByText(dialog!, 'Confirm')?.click();
       fixture.detectChanges();
-      buttonByText(dialog!, 'Submit')?.click();
+      buttonByText(dialog!, 'Confirm')?.click();
       buttonByText(dialog!, 'Submitting…')?.click();
       fixture.detectChanges();
 
@@ -149,7 +160,7 @@ describe('Рівень 2 · сторінка Owner Review', () => {
       const { fixture, element } = create();
       buttonByText(element, 'Submit Pre-Order')?.click();
       fixture.detectChanges();
-      buttonByText(element.querySelector('[role="dialog"]')!, 'Submit')?.click();
+      buttonByText(element.querySelector('[role="dialog"]')!, 'Confirm')?.click();
       fixture.detectChanges();
 
       expect(element.textContent).toContain('Sent to Restaurant');
@@ -161,7 +172,7 @@ describe('Рівень 2 · сторінка Owner Review', () => {
       const { fixture, element } = create();
       buttonByText(element, 'Submit Pre-Order')?.click();
       fixture.detectChanges();
-      buttonByText(element.querySelector('[role="dialog"]')!, 'Submit')?.click();
+      buttonByText(element.querySelector('[role="dialog"]')!, 'Confirm')?.click();
       fixture.detectChanges();
 
       expect(buttonByText(element, 'Submit Pre-Order')?.disabled).toBeFalse();

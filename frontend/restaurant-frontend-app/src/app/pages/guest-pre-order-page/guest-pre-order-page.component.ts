@@ -10,6 +10,7 @@ import { GuestMenuDish } from '@app/services/guest-sessions/guest-sessions.servi
 import { DishCardComponent } from '@app/shared/custom-components/dish-card/dish-card.component';
 import { MainCoverImageComponent } from '@app/shared/custom-components/main-cover-image/main-cover-image.component';
 import { ToastService } from '@app/services/toast/toast.service';
+import { SubmissionConfirmationComponent, SubmissionItem } from '@app/shared/custom-components/submission-confirmation/submission-confirmation.component';
 import { GuestPreorderStore } from './state/guest-preorder.store';
 
 import { GuestNameModalComponent } from './ui/guest-name-modal/guest-name-modal.component';
@@ -27,7 +28,8 @@ import { GuestPreorderSubmittedComponent } from './ui/guest-preorder-submitted/g
         MainCoverImageComponent,
         GuestNameModalComponent,
         GuestCartDrawerComponent,
-        GuestPreorderSubmittedComponent
+        GuestPreorderSubmittedComponent,
+        SubmissionConfirmationComponent
     ],
 })
 export class GuestPreOrderPageComponent {
@@ -38,6 +40,11 @@ export class GuestPreOrderPageComponent {
 
     readonly store = inject(GuestPreorderStore);
     readonly isCartOpen = signal(false);
+    readonly confirmationOpen = signal(false);
+    readonly submitting = signal(false);
+    readonly confirmationItems = computed<SubmissionItem[]>(() =>
+        this.store.cartItems().map(item => ({ name: item.title, quantity: item.qty, unitPrice: item.price }))
+    );
     readonly selectedCategory = signal<string | null>(null);
     readonly selectedSort = signal<'recommended' | 'price-asc' | 'price-desc'>('recommended');
 
@@ -86,6 +93,34 @@ export class GuestPreOrderPageComponent {
                 this.router.navigateByUrl('/guest-pre-order-expired');
             }
         });
+
+        effect(() => {
+            if (this.store.status() !== 'active' && !this.submitting()) {
+                this.confirmationOpen.set(false);
+            }
+        });
+    }
+
+    openConfirmation(): void {
+        if (this.store.status() !== 'active' || this.store.cartBusy() ||
+            !this.store.cartItems().length || this.submitting()) return;
+        this.confirmationOpen.set(true);
+    }
+
+    closeConfirmation(): void {
+        if (!this.submitting()) this.confirmationOpen.set(false);
+    }
+
+    async confirmSubmission(): Promise<void> {
+        if (!this.confirmationOpen() || this.submitting() || this.store.cartBusy() ||
+            this.store.status() !== 'active' || !this.store.cartItems().length) return;
+        this.submitting.set(true);
+        try {
+            await this.store.submitPreorder();
+        } finally {
+            this.submitting.set(false);
+            this.confirmationOpen.set(false);
+        }
     }
 
     openCart() { this.isCartOpen.set(true); }

@@ -1,0 +1,19 @@
+<app-modal [title]="title()" width="520px" [closeOnBackdrop]="!busy()" (closed)="close()"
+  cdkTrapFocus [cdkTrapFocusAutoCapture]="true">
+  <p>{{ warning() }}</p>
+  @if (kind() === 'group' && pendingGuests() > 0) {
+    <p role="status">{{ pendingGuests() }} {{ pendingGuests() === 1 ? 'participant has' : 'participants have' }} not submitted yet.</p>
+  }
+  <ul class="submission-items">
+    @for (item of items(); track $index) {
+      <li><span>{{ item.name }} × {{ item.quantity }}</span><span>{{ item.unitPrice * item.quantity | currency }}</span></li>
+    }
+  </ul>
+  <p class="submission-total">Total <strong>{{ total() | currency }}</strong></p>
+  <div modal-actions class="submission-actions">
+    <button type="button" class="button button--secondary button--large" [disabled]="busy()" (click)="close()">Cancel</button>
+    <button type="button" class="button button--primary button--large" [disabled]="busy() || items().length === 0" (click)="confirm()">
+      {{ busy() ? 'Submitting…' : 'Confirm' }}
+    </button>
+  </div>
+</app-modal>

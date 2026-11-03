@@ -15,6 +15,9 @@
     (click)="$event.stopPropagation()"
     (keydown)="$event.stopPropagation()"
   >
+    @if (submissionError()) {
+      <p role="alert">{{ submissionError() }}</p>
+    }
     <div class="cart-header">
       <h3 id="cart-title">Cart</h3>
 
@@ -48,7 +51,7 @@
           ) {
           <app-not-submitted-order
             [order]="item"
-            (submitted)="submitOrder($event)"
+            (submitted)="openSubmission($event)"
             (removeDish)="
               removeDishFromOrder(item.orderId, $event)
             "
@@ -121,6 +124,11 @@
     }
   </div>
 </div>
+
+@if (pendingOrder()) {
+  <app-submission-confirmation kind="ordinary" [items]="pendingItems()" [busy]="submitting()"
+    (closed)="closeSubmission()" (confirmed)="submitOrder()" />
+}
 
 @if (cancelOrderId(); as orderId) {
   <app-cancel-order-modal

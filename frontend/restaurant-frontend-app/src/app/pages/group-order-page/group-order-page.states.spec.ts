@@ -127,7 +127,7 @@ describe('Group order page state and lifecycle', () => {
     for (let attempt = 0; attempt < 2; attempt++) {
       button(element, 'Submit Pre-Order')?.click();
       fixture.detectChanges();
-      button(element.querySelector('[role="dialog"]')!, 'Submit')?.click();
+      button(element.querySelector('[role="dialog"]')!, 'Confirm')?.click();
       fixture.detectChanges();
     }
     expect(service.submit$).toHaveBeenCalledTimes(2);

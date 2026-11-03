@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { of } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { Order } from '@app/models/orders/order.model';
 import { PreOrdersService } from '@app/services/pre-orders/pre-orders.service';
@@ -124,5 +124,60 @@ describe('CartComponent', () => {
     expect(routerMock.navigate).toHaveBeenCalledWith([
       '/reservations',
     ]);
+  });
+  const draft = {
+    orderId: 'order-1', reservationId: 'reservation-1', status: 0,
+    reservationAddress: 'Street', reservationTime: '2030-01-01T12:00:00Z',
+    orderItems: [{ dish: { id: 'salad', name: 'Salad', price: 8 }, quantity: 2 }],
+  } as Order;
+
+  it('opens ordinary confirmation with the selected dish and total; Cancel does not submit', () => {
+    component.orders.set([draft]);
+    component.openSubmission(draft.orderId);
+    fixture.detectChanges();
+    const dialog = (fixture.nativeElement as HTMLElement).querySelector('app-submission-confirmation [role="dialog"]');
+    expect(dialog?.textContent).toContain('Salad × 2');
+    expect(dialog?.textContent).toContain('$16.00');
+    component.closeSubmission();
+    fixture.detectChanges();
+    expect(preOrdersServiceMock.submitPreOrderByReservationId).not.toHaveBeenCalled();
+    expect(component.pendingOrderId()).toBeNull();
+  });
+
+  it('confirms ordinary order once even when Confirm is invoked twice', () => {
+    const pending = new Subject<unknown>();
+    preOrdersServiceMock.submitPreOrderByReservationId.and.returnValue(pending as ReturnType<PreOrdersService['submitPreOrderByReservationId']>);
+    component.orders.set([draft]);
+    component.openSubmission(draft.orderId);
+    component.submitOrder();
+    component.submitOrder();
+    expect(preOrdersServiceMock.submitPreOrderByReservationId).toHaveBeenCalledOnceWith('reservation-1');
+    pending.next({});
+    pending.complete();
+    expect(component.pendingOrderId()).toBeNull();
+  });
+
+  it('rejects a stale ordinary order and allows recovery after a server error', () => {
+    component.orders.set([{ ...draft, status: 1 }]);
+    component.openSubmission(draft.orderId);
+    expect(component.pendingOrderId()).toBeNull();
+    component.orders.set([draft]);
+    component.openSubmission(draft.orderId);
+    preOrdersServiceMock.submitPreOrderByReservationId.and.returnValue(throwError(() => new Error('stale')));
+    component.submitOrder();
+    expect(component.submissionError()).toContain('Could not submit');
+    expect(component.submitting()).toBeFalse();
+    expect(component.pendingOrderId()).toBeNull();
+  });
+
+  it('preserves ordinary unsubmit and cancel service actions', () => {
+    component.orders.set([{ ...draft, status: 1 }]);
+    preOrdersServiceMock.unsubmitPreOrderByReservationId.and.returnValue(of({}));
+    preOrdersServiceMock.cancelPreOrderByReservationId.and.returnValue(of({}));
+    component.editOrder(draft.orderId);
+    component.orders.set([{ ...draft, status: 1 }]);
+    component.cancelOrder(draft.orderId);
+    expect(preOrdersServiceMock.unsubmitPreOrderByReservationId).toHaveBeenCalledOnceWith('reservation-1');
+    expect(preOrdersServiceMock.cancelPreOrderByReservationId).toHaveBeenCalledOnceWith('reservation-1');
   });
 });
