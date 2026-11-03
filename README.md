@@ -1,74 +1,57 @@
-# Green & Tasty — EPAM IT Marathon 6.0
+# Green & Tasty
 
-This repository contains a restaurant booking and group pre-order application, its AWS infrastructure, and the completed EPAM DevOps, backend, frontend, Manual QA, and test-automation homework. The active application is under `backend/` and `frontend/`; the deployed backend is managed by **Terraform**, not AWS Syndicate.
+Green & Tasty is a restaurant booking and group pre-order application. Customers can browse restaurants and menus, reserve a table, invite guests to choose dishes, and submit one combined order. Waiters can view reservations and submitted pre-orders; admins manage restaurant data.
 
 ## Architecture
 
-| Layer | Implementation |
-| --- | --- |
-| Web app | Angular 22 standalone components, SCSS, signals and RxJS; production files in private S3 behind CloudFront |
-| API | .NET 10 Lambda functions behind API Gateway REST API (`develop` stage) |
-| Identity and data | Cognito user pool; DynamoDB tables for restaurant, booking, order, and reporting data |
-| Background work | SQS, report Lambdas, EventBridge Scheduler, SES for email |
-| Infrastructure | Terraform in `infra/terraform/`, with remote S3 state and a separate artifacts bucket |
-| Verification | xUnit backend tests, Karma/Jasmine frontend tests, Reqnroll/TUnit/Playwright AQA, Gherkin lint, and an optional manual AWS CodeBuild/ReportPortal bonus |
+| Part | Technology | Purpose |
+| --- | --- | --- |
+| Web app | Angular 22, TypeScript, SCSS | Customer, waiter, and admin interfaces; hosted on S3 behind CloudFront |
+| API | .NET 10 on AWS Lambda and API Gateway | Reservations, menus, group orders, user and waiter operations |
+| Identity and data | Amazon Cognito and DynamoDB | Authentication, roles, and application records |
+| Background processing | SQS, Lambda, EventBridge Scheduler, SES | Reports and email delivery |
+| Infrastructure | Terraform | AWS resources and deployment configuration |
 
-The Owner group-order screen uses the real API in normal mode, including a 15-second refresh while the group is open. Development demo mode uses EPAM mock data and providers; the production bundle check rejects demo markers. See the [frontend guide](frontend/restaurant-frontend-app/README.md) for the distinction.
+## Repository
 
-## Repository map
+- [Frontend](frontend/restaurant-frontend-app/README.md) — Angular app, local setup, and UI checks.
+- [Backend](backend/restaurant-backend-app/README.md) — Lambda source, API routes, and .NET tests.
+- [Infrastructure](infra/terraform/README.md) — Terraform configuration and deployment steps.
+- [End-to-end tests](aqa/restaurant-aqa-framework/README.md) — API and browser test framework.
+- `scripts/` — packaging, validation, and deployment helpers.
 
-| Path | Purpose |
-| --- | --- |
-| [`backend/restaurant-backend-app/`](backend/restaurant-backend-app/README.md) | Lambda source, API contracts, xUnit tests, backend homework evidence |
-| [`frontend/restaurant-frontend-app/`](frontend/restaurant-frontend-app/README.md) | Active Angular app and frontend tests |
-| [`infra/terraform/`](infra/terraform/README.md) | AWS resources, deployment instructions, DevOps verification |
-| [`aqa/restaurant-aqa-framework/`](aqa/restaurant-aqa-framework/README.md) | End-to-end framework and level-specific runners |
-| [`docs/epam-homework/`](docs/epam-homework/README.md) | Homework index, original EPAM assignments, implementation records, QA deliverables, screenshots |
-| `scripts/` | Local packaging, contract checks, deployment helpers, AQA runners |
-| `green-and-tasty/`, `marathon2026-main/` | Supplied EPAM reference copies; they are not the active deployment source. `marathon2026-main/` is ignored by Git. |
+## Run locally
 
-## Local setup and checks
+Use the Node.js version in [the frontend `.nvmrc`](frontend/restaurant-frontend-app/.nvmrc). To start the web app:
 
-Use .NET SDK 10, Node.js matching [`frontend/restaurant-frontend-app/.nvmrc`](frontend/restaurant-frontend-app/.nvmrc) (or a version allowed by `package.json`), npm, Python 3, and Chrome/Chromium for the frontend tests. Terraform and AWS CLI are needed for infrastructure work; a live AWS account is **not** needed for the checks below. Install npm dependencies with `npm ci` in the frontend directory. Restore .NET packages when the local cache is empty.
+```bash
+cd frontend/restaurant-frontend-app
+npm ci
+npm start
+```
 
-From the repository root:
+Open `http://localhost:4200/`. The development configuration connects to a deployed API, so real sign-in and data operations require that API to be available. See the frontend guide for development settings and build configuration.
+
+## Check the project
+
+With .NET SDK 10 and Python 3 installed, run backend checks from the repository root:
 
 ```bash
 dotnet test backend/restaurant-backend-app/Tests/APIHandler.Tests.csproj
-dotnet build backend/restaurant-backend-app/restaurant-backend-app.sln
 python3 scripts/check-deployment.py
-terraform -chdir=infra/terraform fmt -check -recursive
-terraform -chdir=infra/terraform validate
 ```
 
-Frontend checks from `frontend/restaurant-frontend-app/`:
+Run frontend checks from `frontend/restaurant-frontend-app/`:
 
 ```bash
-npm ci
 npm run lint
 npm test -- --watch=false --browsers=ChromeHeadless
-npm run test:hw -- --browsers=ChromeHeadless
-BACKEND_URL=https://example.invalid/develop npm run build
 ```
 
-The example URL checks that a bundle can be built; **do not upload that bundle**. Build again with the real Terraform `backend_url` before publishing. The generated `src/environments/environment.production.ts` is ignored and contains the supplied URL. `npm start` serves the local development app at `http://localhost:4200/`; its committed development environment points to a particular deployed API, so use the [frontend guide](frontend/restaurant-frontend-app/README.md) before testing real login.
+Browser tests need Chrome or Chromium. The [end-to-end test guide](aqa/restaurant-aqa-framework/README.md) covers its separate setup; live scenarios require a running environment and private test credentials.
 
-The AQA framework has separate [offline quality checks and live runners](aqa/restaurant-aqa-framework/README.md). Live E2E tests create and remove application data and require private account configuration; they are never part of the local command list above.
+## Deploy to AWS
 
-The [2026-11-02 validation record](docs/epam-homework/Validation.md) reports actual results, warnings, the AQA formatting follow-up, and what was not run. Passing local tests does not establish that the live AWS environment is healthy.
+Terraform defines the API, identity and data services, background workers, storage, and CloudFront distribution. Follow the [deployment guide](infra/terraform/README.md) to configure an AWS account, build Lambda packages, review a plan, and publish the frontend. Production builds must use the actual API URL from Terraform. AWS resources can incur charges.
 
-## Deployment overview
-
-The active DevOps homework uses [Terraform deployment instructions](infra/terraform/README.md): check the account, build Linux Lambda ZIPs locally, supply ignored local Terraform settings, initialize remote state, review a plan, then apply it. Build the frontend with Terraform's real `backend_url`, upload the browser output to Terraform's frontend bucket, and account for CloudFront caching. The infrastructure also contains an optional, manually triggered AQA CodeBuild project; ReportPortal credentials stay in private configuration.
-
-These are AWS-changing steps and can incur charges. Do not run `syndicate deploy`, `syndicate update`, or `syndicate clean` against this Terraform-owned stack. The old Syndicate lesson metadata remains in the backend as reference only. Deployment history and limitations are recorded in [DevOps verification](infra/terraform/DEPLOYMENT-VERIFICATION.md).
-
-## Homework and evidence
-
-Start at the [EPAM homework index](docs/epam-homework/README.md). Backend levels 1–3 are documented beside the backend API; frontend levels 1–3 and the Remove Guest bonus have implementation and acceptance records; Manual QA artifacts are in `docs/epam-homework/qa/`; AQA levels 1–3 and the optional ReportPortal/CodeBuild bonus are in `docs/epam-homework/aqa/`.
-
-Original assignment text is retained separately from completion evidence. Earlier report sections describe checkpoints at the time they were written; use the [validation record](docs/epam-homework/Validation.md) and the latest linked follow-up records for current verification status.
-
-## Private configuration
-
-Do not commit credentials, passwords, tokens, invitation links, private screenshots, Terraform state/plans, Lambda artifacts, AQA `TestResults/`, `aqa/restaurant-aqa-framework/.env`, `infra/terraform/terraform.tfvars`, `infra/terraform/backend.local.hcl`, or generated frontend production environment files. Templates such as `.env.example` and `terraform.tfvars.example` contain placeholders. Before sharing evidence, check images and logs for account IDs, emails, ARNs, cookies, and personal guest data.
+Keep credentials, local `.env` files, Terraform state and plans, and generated build or test artifacts out of Git. Use the configuration examples in the component guides as starting points.
