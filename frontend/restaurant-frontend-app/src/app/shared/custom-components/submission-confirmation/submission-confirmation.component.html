@@ -6,7 +6,10 @@
   }
   <ul class="submission-items">
     @for (item of items(); track $index) {
-      <li><span>{{ item.name }} × {{ item.quantity }}</span><span>{{ item.unitPrice * item.quantity | currency }}</span></li>
+      <li>
+        <span class="submission-item-name">{{ item.name }} × {{ item.quantity }}</span>
+        <span class="submission-item-price">{{ item.unitPrice * item.quantity | currency }}</span>
+      </li>
     }
   </ul>
   <p class="submission-total">Total <strong>{{ total() | currency }}</strong></p>
