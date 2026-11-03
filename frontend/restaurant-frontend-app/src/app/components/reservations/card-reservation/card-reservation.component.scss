@@ -108,6 +108,13 @@
   }
 }
 
+.invite-disabled-reason {
+  flex-basis: 100%;
+  color: color.$neutral-600;
+  font-size: 0.875rem;
+  text-align: right;
+}
+
 .change-table {
   display: flex;
 

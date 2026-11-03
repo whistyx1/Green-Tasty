@@ -121,18 +121,22 @@ public class GroupReservationService(
         await groupReservationRepository.SaveGroupReservationAsync(groupReservation);
     }
 
-    public async Task<GetGroupInviteTokenResponse> GetGroupReservationInviteTokenAsync(string reservationId)
+    public async Task<GetGroupInviteTokenResponse> GetGroupReservationInviteTokenAsync(string userId, string reservationId)
     {
         var reservation = await reservationRepository.GetReservationByIdAsync(reservationId)
             ?? throw new ReservationNotFoundException($"Reservation {reservationId} was not found.");
 
+        if (string.IsNullOrWhiteSpace(userId) || !string.Equals(reservation.CustomerId, userId, StringComparison.Ordinal))
+            throw new ActionForbiddenException("Only the reservation owner can perform this action.");
+
         if (reservation.GuestCount < 2)
             throw new ValidationException("Retrieving invitation token for the reservation with only one guest is not permitted.");
 
-        if (reservation.Status != ReservationStatus.Reserved)
+        if (reservation.Status != ReservationStatus.Reserved || reservation.EndTime.ToUniversalTime() <= DateTime.UtcNow)
             throw new GroupReservationExpiredException("The group reservation is expired.");
 
-        GroupReservation groupReservation = (await groupReservationRepository.GetByReservationIdAsync(reservationId))!;
+        GroupReservation groupReservation = await groupReservationRepository.GetByReservationIdAsync(reservationId)
+            ?? throw new GroupReservationNotFoundException();
 
         if (groupReservation.Status == GroupReservationStatus.Submitted)
             throw new GroupReservationSubmittedException();

@@ -17,6 +17,7 @@
       <app-card-reservation
         [r]="reservation"
         [role]="role()"
+        [ownerUserId]="customerId()"
         [statusEnum]="statusEnum"
         (cancelReservation)="cancelReservation($event)"
         (editReservation)="openEditModal($event)"

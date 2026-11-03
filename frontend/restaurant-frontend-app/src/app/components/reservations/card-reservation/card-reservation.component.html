@@ -132,6 +132,22 @@
   </div>
 
   <div class="actions">
+    @if (showInviteAction()) {
+      <button
+        type="button"
+        class="button button--secondary button--large"
+        [disabled]="!!inviteDisabledReason() || copyingInvite()"
+        [attr.aria-describedby]="inviteDisabledReason() ? 'invite-reason-' + r().id : null"
+        (click)="copyInvitationLink()"
+      >
+        {{ copyingInvite() ? 'Copying…' : 'Copy Invitation Link' }}
+      </button>
+      @if (inviteDisabledReason()) {
+        <span [id]="'invite-reason-' + r().id" class="invite-disabled-reason" role="status">
+          {{ inviteDisabledReason() }}
+        </span>
+      }
+    }
     @switch (r().status) {
       @case (ReservationStatusCustomer.Reserved) {
         <button

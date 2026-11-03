@@ -38,6 +38,7 @@ export interface ReservationCustomer {
   feedback?: FeedbackReservationResponseItem;
   tableName?: string;
   customerId?: string;
+  guestInviteLinkAvailable?: boolean;
   waiterId: string;
   hasSubmittedPreOrder?: boolean;
   preOrder?: Order;

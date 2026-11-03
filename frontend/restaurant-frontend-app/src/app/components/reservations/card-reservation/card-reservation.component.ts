@@ -3,12 +3,17 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   inject,
+  Injector,
   input,
+  OnInit,
   output,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
+import { interval } from 'rxjs';
 
 import { WaiterPreOrderState } from '@app/models/orders/order.model';
 import { CreateOrderRequest } from '@app/models/cart/create-order-request.model';
@@ -20,6 +25,8 @@ import { PlaceOrderWaiterComponent } from '@app/components/place-order-waiter/pl
 import { Roles } from '@app/shared/constants/roles';
 import { CustomSelectComponent } from '@app/shared/custom-components/custom-select/custom-select.component';
 import { preOrderMenuQueryParams } from '@app/shared/helpers/pre-order-navigation';
+import { GuestInviteService } from '@app/services/reservation/guest-invite.service';
+import { ToastService } from '@app/services/toast/toast.service';
 
 interface ReservationStatusView {
   class: string;
@@ -38,13 +45,66 @@ interface ReservationStatusView {
   styleUrl: './card-reservation.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class CardReservationComponent {
+export class CardReservationComponent implements OnInit {
   private readonly router = inject(Router);
+  private readonly injector = inject(Injector);
+  private readonly destroyRef = inject(DestroyRef);
   readonly Roles = Roles;
   readonly ReservationStatusCustomer = ReservationStatusCustomer;
 
   readonly r = input.required<ReservationCustomer>();
   readonly role = input<string>(Roles.CUSTOMER);
+  readonly ownerUserId = input('');
+  private readonly now = signal(Date.now());
+  readonly copyingInvite = signal(false);
+  readonly showInviteAction = computed(() =>
+    this.role() === Roles.CUSTOMER &&
+    this.r().guestCount > 1 &&
+    !!this.ownerUserId() &&
+    this.r().customerId === this.ownerUserId()
+  );
+  readonly inviteDisabledReason = computed(() => {
+    if (this.r().status !== ReservationStatusCustomer.Reserved)
+      return 'Invitation unavailable: reservation is no longer active.';
+    if (new Date(this.r().endTime).getTime() <= this.now())
+      return 'Invitation unavailable: reservation has ended.';
+    if (!this.r().guestInviteLinkAvailable)
+      return 'Invitation unavailable: group pre-order is submitted or closed.';
+    return '';
+  });
+
+  ngOnInit(): void {
+    if (this.showInviteAction()) {
+      interval(60_000).pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe(() => this.now.set(Date.now()));
+    }
+  }
+
+  copyInvitationLink(): void {
+    this.now.set(Date.now());
+    if (!this.showInviteAction() || this.inviteDisabledReason() || this.copyingInvite()) return;
+    const guestInviteService = this.injector.get(GuestInviteService);
+    const toastService = this.injector.get(ToastService);
+    this.copyingInvite.set(true);
+    guestInviteService.getInviteToken$(this.r().id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: async ({ token }) => {
+          try {
+            await navigator.clipboard.writeText(`${window.location.origin}/join/${token}`);
+            toastService.success('Share it with your friends.', 'Link copied!');
+          } catch {
+            toastService.error('Could not copy the link. Please try again.');
+          } finally {
+            this.copyingInvite.set(false);
+          }
+        },
+        error: () => {
+          this.copyingInvite.set(false);
+          toastService.error('Invitation link is unavailable. Please refresh your reservations.');
+        },
+      });
+  }
   readonly statusEnum =
     input<Record<number, ReservationStatusView>>({});
 

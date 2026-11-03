@@ -13,17 +13,30 @@ public class GetInviteTokenHandler(IGroupReservationService service) : IApiReque
 {
     public async Task<APIGatewayProxyResponse> HandleRequest(APIGatewayProxyRequest request, ILambdaContext context)
     {
+        if (request.RequestContext?.Authorizer?.Claims == null ||
+            !request.RequestContext.Authorizer.Claims.TryGetValue("sub", out var userId) ||
+            string.IsNullOrWhiteSpace(userId))
+            return ResponseBuilder.CreateErrorResponse(401, "Unauthorized.", context.Logger);
+
         if (!request.TryGetPathValue("reservationId", out string? reservationId))
             return ResponseBuilder.CreateErrorResponse(404, "Reservation was not found", context.Logger);
 
         try
         {
-            GetGroupInviteTokenResponse result = await service.GetGroupReservationInviteTokenAsync(reservationId);
+            GetGroupInviteTokenResponse result = await service.GetGroupReservationInviteTokenAsync(userId, reservationId);
             return ResponseBuilder.CreateJsonResponse(200, result);
         }
         catch (ReservationNotFoundException exception)
         {
             return ResponseBuilder.CreateErrorResponse(404, exception.Message, context.Logger, exception);
+        }
+        catch (GroupReservationNotFoundException)
+        {
+            return ResponseBuilder.CreateErrorResponse(404, "Group reservation was not found.", context.Logger);
+        }
+        catch (ActionForbiddenException)
+        {
+            return ResponseBuilder.CreateErrorResponse(403, "Only the reservation owner can perform this action.", context.Logger);
         }
         catch(ValidationException exception)
         {
