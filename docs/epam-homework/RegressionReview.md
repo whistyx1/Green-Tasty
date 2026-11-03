@@ -1,5 +1,10 @@
 # EPAM acceptance and regression review — 2026-10-30
 
+> Historical acceptance review from 2026-10-30. Later frontend fixes,
+> publication, and validation are recorded in [FrontendUiFixes.md](FrontendUiFixes.md)
+> and [Validation.md](Validation.md).
+
+
 ## Conclusion
 
 Independent read-only review found no blocking mismatch with EPAM functional
@@ -122,7 +127,7 @@ the sandbox ran successfully. Actual final checks:
 - Narrow profile suite: **32 passed, 0 failed**, exit 0.
 - Full `npm test -- --watch=false --browsers=ChromeHeadless`: **352 passed, 0 failed**,
   all 352 executed in Chrome Headless 156, exit 0. This includes the homework cases.
-- Full backend `dotnet test .../Tests/APIHandler.Tests.csproj --no-restore`: 
+- Full backend `dotnet test .../Tests/APIHandler.Tests.csproj --no-restore`:
   **271 passed, 0 failed, 0 skipped**, exit 0.
 - Production `npm run build` with existing AWS API URL: exit 0, initial 651.40 kB,
   estimated 134.76 kB transfer. Bundle guard passed: no configuration placeholders

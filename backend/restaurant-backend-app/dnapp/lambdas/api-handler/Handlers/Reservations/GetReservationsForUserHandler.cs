@@ -22,9 +22,6 @@ namespace APIHandler.Handlers.Reservations;
 
 public class GetReservationsForUserHandler : IApiRequestHandler
 {
-    private static readonly string ReservationsTableName = ResourceNames.ReservationsTableName;
-    private static readonly string ReservationsCustomerIdGlobalIndex = ResourceNames.ReservationsCustomerIdGlobalIndex;
-
     private readonly IReservationRepository _reservationRepository;
     private readonly ILocationService _locationService;
     private readonly IOrderService _orderService;
@@ -73,7 +70,7 @@ public class GetReservationsForUserHandler : IApiRequestHandler
 
     private async Task<APIGatewayProxyResponse> GetReservationsForWaiterAsync(string userId, ILambdaContext context)
     {
-        context.Logger.LogLine($"Querying DynamoDB with index: '{ResourceNames.ReservationsWaiterIdGlobalIndex}' on table: '{ResourceNames.ReservationsTableName}'");
+        context.Logger.LogLine("Querying the current Waiter's reservations.");
 
         IEnumerable<Reservation> reservations = await _reservationRepository.GetReservationsByWaiterIdAsync(userId);
 
@@ -88,6 +85,10 @@ public class GetReservationsForUserHandler : IApiRequestHandler
             catch (Exception ex)
             {
                 context.Logger.LogLine($"Error converting reservation {reservation.Id} to response: {ex.Message}");
+                // A cancelled reservation may outlive its removed table. It cannot be
+                // rendered in the Waiter list, but must not hide current reservations.
+                if (reservation.Status == ReservationStatus.Cancelled)
+                    continue;
                 return ResponseBuilder.CreateErrorResponse(500, "Internal Server Error: Error while fetching reservation details.", context.Logger);
             }
         }

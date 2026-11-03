@@ -83,24 +83,33 @@
         </span>
       </div>
 
-      <div class="details-line">
-        <span class="details">
-          <img
-            class="line-icon"
-            src="assets/svg/pre-order.svg"
-            alt=""
-            aria-hidden="true"
-          />
-
-          Pre-order:
-          {{ preOrderItemCount() }}
-          {{
-            preOrderItemCount() === 1
-              ? 'dish'
-              : 'dishes'
-          }}
-        </span>
-      </div>
+      @if (r().preOrderLoadError) {
+        <div class="details-line">
+          <span class="details" role="alert">Pre-order unavailable.</span>
+          <button
+            type="button"
+            class="button button--secondary"
+            [disabled]="r().preOrderRetrying"
+            (click)="retryPreOrder.emit(r().id)"
+          >
+            {{ r().preOrderRetrying ? 'Retrying...' : 'Retry' }}
+          </button>
+        </div>
+      } @else {
+        <div class="details-line">
+          <span class="details">
+            <img
+              class="line-icon"
+              src="assets/svg/pre-order.svg"
+              alt=""
+              aria-hidden="true"
+            />
+            Pre-order:
+            {{ preOrderItemCount() }}
+            {{ preOrderItemCount() === 1 ? 'dish' : 'dishes' }}
+          </span>
+        </div>
+      }
     }
 
     <div class="details-line">

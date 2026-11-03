@@ -1,59 +1,27 @@
-# RestaurantFrontendApp
+# Green & Tasty frontend
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 19.2.15.
+The active Angular 22 single-page app serves restaurant browsing, booking, pre-orders, and role-specific Customer, Waiter, and Admin views. The EPAM Owner group-order homework levels 1–3 and Remove Guest bonus are implemented in `src/app/pages/group-order-page/`, `src/app/components/group-orders/`, and `src/app/services/group-orders/`. See the [homework index](../../docs/epam-homework/README.md) and [level 3 record](../../docs/epam-homework/FrontendLevel3.md) for behavior and acceptance evidence.
 
-## Development server
+## Setup and development
 
-To start a local development server, run:
-
-```bash
-ng serve
-```
-
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
-
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+Use Node.js matching `.nvmrc` or the `engines` range in `package.json`, then from this directory:
 
 ```bash
-ng generate component component-name
+npm ci
+npm start
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+Open `http://localhost:4200/`. The development environment in `src/environments/environment.development.ts` points to a deployed API; real login therefore requires that API to be reachable. For the isolated EPAM homework demo, open `http://localhost:4200/reservations/demo-reservation/group-order?demo`. Demo authentication and mock group data are development-only and do not require a real account.
+
+## Checks
 
 ```bash
-ng generate --help
+npm run lint
+npm test -- --watch=false --browsers=ChromeHeadless
+npm run test:hw -- --browsers=ChromeHeadless
+BACKEND_URL=https://example.invalid/develop npm run build
 ```
 
-## Building
+The full Karma/Jasmine suite and the homework subset are separate checks. The production build runs `scripts/set-env.mjs` before Angular and `scripts/check-bundle.mjs` afterward; the latter rejects placeholders and development demo markers. An example-URL bundle is useful for compilation only. For deployment, rebuild with the real API URL from Terraform, then follow the [AWS deployment guide](../../infra/terraform/README.md). Build output alone does not publish to CloudFront.
 
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Karma](https://karma-runner.github.io) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+The current [validation record](../../docs/epam-homework/Validation.md) includes actual pass counts and lint warnings. `homework-tests/` retains EPAM's supplied test fixtures; active tests are under `src/app/`. The [frontend follow-up list](docs/FollowUpTasks.md) tracks remaining UI issues separately from homework acceptance.

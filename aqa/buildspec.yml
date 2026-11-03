@@ -1,0 +1,27 @@
+version: 0.2
+
+# Manual, live CodeBuild job. All account values come from Secrets Manager.
+phases:
+  install:
+    runtime-versions:
+      dotnet: 10.0
+    commands:
+      - dotnet --version
+  build:
+    commands:
+      - dotnet restore aqa/restaurant-aqa-framework/restaurant-aqa-framework.csproj
+      - dotnet build aqa/restaurant-aqa-framework/restaurant-aqa-framework.csproj --configuration Release --no-restore
+      - export PLAYWRIGHT_BROWSERS_PATH="$CODEBUILD_SRC_DIR/aqa/restaurant-aqa-framework/.playwright-browsers"
+      - pwsh aqa/restaurant-aqa-framework/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+      - 'case "$AQA_LEVEL" in 1|2|3) ;; *) echo "AQA_LEVEL must be 1, 2, or 3"; exit 2 ;; esac'
+      - python3 "scripts/run-aqa-level${AQA_LEVEL}.py" --live --no-build
+
+# CodeBuild uploads artifacts even when the build phase fails. The runner
+# publishes only redacted TRX/text and masked screenshots under levelN-*.
+artifacts:
+  base-directory: aqa/restaurant-aqa-framework/TestResults
+  files:
+    - 'level*/**/*.trx'
+    - 'level*/summary.json'
+    - 'level*/run.log'
+    - 'level*/screenshots/*.png'

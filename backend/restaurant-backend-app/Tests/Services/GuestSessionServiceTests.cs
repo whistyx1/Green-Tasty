@@ -68,7 +68,7 @@ public class GuestSessionServiceTests
 
         GuestSession? session = null;
         _mockGuestSessionRepository
-            .Setup(r => r.SaveAsync(It.IsAny<GuestSession>()))
+            .Setup(r => r.CreateAsync(It.IsAny<GuestSession>()))
             .Callback<GuestSession>(s => session = s);
 
         _mockGuestSessionRepository

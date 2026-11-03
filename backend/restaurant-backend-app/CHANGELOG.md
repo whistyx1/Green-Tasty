@@ -1,15 +1,3 @@
 # Changelog
-All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [1.0.0] - yyyy-MM-dd
-### Added
-    -  Added items
-
-### Changed
-    -  Changed items 
-
-### Removed
-    -  Removed items 
+The EPAM starter included an empty `1.0.0` template; it was not a record of a released version. This file has not been maintained as a release log. For implemented backend homework and verification, see [Backend level 1](docs/BackendLevel1.md), [level 2](docs/BackendLevel2.md), [level 3](docs/BackendLevel3.md), and the [homework index](../../docs/epam-homework/README.md).

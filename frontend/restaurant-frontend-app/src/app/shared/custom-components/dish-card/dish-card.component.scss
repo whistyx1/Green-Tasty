@@ -52,6 +52,9 @@
     }
 
     .dish-name {
+      flex: 1 1 0;
+      min-width: 0;
+      overflow-wrap: anywhere;
       font-size: 0.875rem;
       line-height: 1.5;
       font-weight: 500;
@@ -63,6 +66,7 @@
       flex: none;
       flex-direction: column;
       align-items: flex-end;
+      white-space: nowrap;
     }
 
     .dish-price {
@@ -116,5 +120,6 @@
     width: 84.23%;
     max-width: 360px;
     flex-shrink: 0;
+    margin-inline: auto;
   }
 }

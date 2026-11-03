@@ -16,6 +16,8 @@ public interface IGuestSessionRepository
 
     Task<List<GuestSession>> GetAllByGroupReservationIdAsync(string groupReservationId);
 
+    Task CreateAsync(GuestSession guestSession);
+
     Task SaveAsync(GuestSession guestSession);
 
     Task DeleteAsync(GuestSession session);

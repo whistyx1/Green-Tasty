@@ -1,5 +1,11 @@
 # Тести домашки
 
+> EPAM starter instructions preserved as reference. The homework levels are
+> now implemented; active specs are already in `src/app/`. Do not recopy a
+> starter level over the completed tests. See the [frontend guide](../README.md)
+> for the current test commands and results.
+
+
 Тести вже написані — ти пишеш код, поки вони не стануть зеленими.
 
 | Папка | Для чого | Скільки тестів |

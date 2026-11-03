@@ -1,5 +1,8 @@
 # EPAM starter synchronization — 2026-10-29
 
+> This records the starter integration at that date. The frontend homework was
+> completed afterward; see the [homework index](README.md) for current status.
+
 The working application remains
 [`frontend/restaurant-frontend-app`](../../frontend/restaurant-frontend-app).
 `green-and-tasty/` is retained unchanged as the original EPAM reference.

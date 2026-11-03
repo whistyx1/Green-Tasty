@@ -1,8 +1,9 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { RouterLink } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { map } from 'rxjs';
+import { fromEvent, interval, map } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { DishListResponse } from '@app/models/dishes/dish-list-response.model';
 import { GuestMenuDish } from '@app/services/guest-sessions/guest-sessions.service';
@@ -33,6 +34,7 @@ export class GuestPreOrderPageComponent {
     private readonly route = inject(ActivatedRoute);
     private readonly router = inject(Router);
     private readonly toast = inject(ToastService);
+    private readonly destroyRef = inject(DestroyRef);
 
     readonly store = inject(GuestPreorderStore);
     readonly isCartOpen = signal(false);
@@ -68,6 +70,10 @@ export class GuestPreOrderPageComponent {
     );
 
     constructor() {
+        interval(15_000).pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe(() => void this.store.checkSession());
+        fromEvent(window, 'focus').pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe(() => void this.store.checkSession());
         // init store by token
         effect(() => {
             const t = this.token();

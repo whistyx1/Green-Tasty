@@ -2,7 +2,7 @@
 
 This project is migrating to Angular Signals. New UI code should follow signals-first patterns.
 
-## Component state 
+## Component state
 - Use `signal()` for local mutable UI state (e.g. toggles, UI flags, selected item).
 - Use `computed()` for derived values (e.g. filtered lists, counters).
 - Use `effect()` for side effects triggered by signal changes (e.g. start/stop polling, sync with services).
@@ -10,7 +10,7 @@ This project is migrating to Angular Signals. New UI code should follow signals-
 > Note: In Angular v22, `effect()` must be created in an injection context (e.g. constructor / field initializer / `runInInjectionContext`).
 
 ## Inputs / Outputs (standalone components)
-- Prefer `input()` / `output()` (InputSignal / OutputEmmiterRef) when creating new standalone components.
+- Prefer `input()` / `output()` (InputSignal / OutputEmitterRef) when creating new standalone components.
 - Avoid introducing new `@Input()` / `@Output()` where signals-based API is feasible.
 
 ## RxJS / HTTP interop
@@ -48,3 +48,4 @@ await TestBed.configureTestingModule({
 
 const fixture = TestBed.createComponent(ComponentUnderTest);
 fixture.detectChanges();
+```

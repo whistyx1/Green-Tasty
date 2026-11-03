@@ -1,5 +1,11 @@
 # Frontend follow-up tasks
 
+> This file preserves original reports and their status at the time. Read the
+> final [display-fix record](../../../docs/epam-homework/FrontendUiFixes.md) and
+> [repository validation](../../../docs/epam-homework/Validation.md) for later
+> fixes and current checks. FE-002 remains a separate requested enhancement.
+
+
 Reported during backend manual testing. These are additional frontend
 items, separate from the EPAM Owner-screen homework. They are recorded for later
 work; recording an item does not mean it has been reproduced or fixed.

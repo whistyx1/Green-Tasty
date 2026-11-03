@@ -42,6 +42,8 @@ export interface ReservationCustomer {
   hasSubmittedPreOrder?: boolean;
   preOrder?: Order;
   preOrders?: Order[];
+  preOrderLoadError?: boolean;
+  preOrderRetrying?: boolean;
   createdByName?: string;
   createdByRole?: 'Customer' | 'Waiter';
 }

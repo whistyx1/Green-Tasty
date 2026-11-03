@@ -6,6 +6,7 @@ import { of } from 'rxjs';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MenuPageComponent } from './menu-page.component';
 import { API_BASE_URL } from '@app/shared/config/api-base-url.token';
+import { DishListResponse } from '@app/models/dishes/dish-list-response.model';
 
 describe('MenuPageComponent', () => {
   let component: MenuPageComponent;
@@ -38,5 +39,30 @@ describe('MenuPageComponent', () => {
   it('loads an empty menu through the routed page', () => {
     expect(component.dishes).toEqual([]);
     expect(component.isPreOrderEnabled).toBeFalse();
+  });
+
+  it('balances the outer margins when a row contains multiple dishes', () => {
+    const dish: DishListResponse = {
+      id: 'dish-0', name: 'Marathon Demo Salad', imageUrl: '', price: 8,
+      state: 'Available', weight: '250 g', dishType: 'Appetizer',
+      description: 'Demo dish', calories: '180', proteins: '0',
+      carbohydrates: '0', fats: '0', vitamins: 'A',
+    };
+    component.filteredDishes = Array.from({ length: 8 }, (_, index) => ({
+      ...dish, id: `dish-${index}`,
+    }));
+    fixture.detectChanges();
+
+    const grid: HTMLElement = fixture.nativeElement.querySelector('.dish-cards');
+    const cards = Array.from(grid.querySelectorAll<HTMLElement>('.dish-card'));
+    const gridBounds = grid.getBoundingClientRect();
+    const firstTop = cards[0].getBoundingClientRect().top;
+    const firstRow = cards.filter((card) => Math.abs(card.getBoundingClientRect().top - firstTop) < 1);
+    const leftInset = firstRow[0].getBoundingClientRect().left - gridBounds.left;
+    const rightInset = gridBounds.right - firstRow[firstRow.length - 1].getBoundingClientRect().right;
+
+    expect(gridBounds.width).toBeGreaterThan(0);
+    expect(firstRow.length).toBeGreaterThan(1);
+    expect(Math.abs(leftInset - rightInset)).toBeLessThanOrEqual(1);
   });
 });

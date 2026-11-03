@@ -1,5 +1,10 @@
 # Local Setup Guide
 
+> Legacy EPAM Syndicate lesson guide. The deployed project uses
+> [Terraform](../../infra/terraform/README.md). Do not follow the Syndicate
+> deployment or cleanup steps for the Terraform-owned AWS resources.
+
+
 This document explains how to prepare your local environment and AWS account for deploying the restaurant backend application.
 
 ---

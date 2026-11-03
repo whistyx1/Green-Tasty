@@ -1,0 +1,156 @@
+name: AQA Tests (manual opt-in)
+
+on:
+  workflow_dispatch:
+    inputs:
+      allow_live_tests:
+        description: "Run tests against the configured deployment (creates/changes test data)"
+        type: boolean
+        required: true
+        default: false
+      scope:
+        description: "Select the implemented level or a starter subset"
+        type: choice
+        options: [level1, level1-api, level1-ui, level2, level2-api, level2-ui, level3, level3-api, level3-ui]
+        default: level1
+
+# No push/PR/scheduled live execution during preparation.
+concurrency:
+  group: aqa-live-environment
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    if: ${{ inputs.allow_live_tests }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: aqa/restaurant-aqa-framework
+    env:
+      UI_URL: ${{ vars.AQA_UI_URL }}
+      API_URL: ${{ vars.AQA_API_URL }}
+      TESTTABLE_ID: ${{ vars.AQA_TESTTABLE_ID }}
+      OWNER_USERNAME: ${{ secrets.AQA_OWNER_USERNAME }}
+      OWNER_PASSWORD: ${{ secrets.AQA_OWNER_PASSWORD }}
+      OTHER_CUSTOMER_USERNAME: ${{ secrets.AQA_OTHER_CUSTOMER_USERNAME }}
+      OTHER_CUSTOMER_PASSWORD: ${{ secrets.AQA_OTHER_CUSTOMER_PASSWORD }}
+      WAITER_USERNAME: ${{ secrets.AQA_WAITER_USERNAME }}
+      WAITER_PASSWORD: ${{ secrets.AQA_WAITER_PASSWORD }}
+      ADMIN_USERNAME: ${{ secrets.AQA_ADMIN_USERNAME }}
+      ADMIN_PASSWORD: ${{ secrets.AQA_ADMIN_PASSWORD }}
+      TESTTABLE_WAITER_USERNAME: ${{ secrets.AQA_TESTTABLE_WAITER_USERNAME }}
+      TESTTABLE_WAITER_PASSWORD: ${{ secrets.AQA_TESTTABLE_WAITER_PASSWORD }}
+      BROWSER: chromium
+      HEADLESS: "true"
+      MAX_PARALLEL_TESTS: "1"
+      TRACE_MODE: OnFailureOnly
+      SKIP_PRE_RUN_CLEANUP: "true"
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/aqa/restaurant-aqa-framework/.playwright-browsers
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          test -n "$UI_URL" || { echo "Set the AQA_UI_URL repository variable."; exit 1; }
+          test -n "$API_URL" || { echo "Set AQA_API_URL including the API stage."; exit 1; }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore restaurant-aqa-framework.csproj
+
+      - name: Build
+        run: dotnet build restaurant-aqa-framework.csproj --configuration Release --no-restore
+
+      - name: Install isolated browser and Linux dependencies
+        shell: pwsh
+        run: ./bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+
+      - name: Run selected homework tests
+        id: run_tests
+        continue-on-error: true
+        shell: bash
+        env:
+          REQUESTED_SCOPE: ${{ inputs.scope }}
+        run: |
+          case "$REQUESTED_SCOPE" in
+            level1) level=1; scope=all ;;
+            level1-api) level=1; scope=api ;;
+            level1-ui) level=1; scope=ui ;;
+            level2) level=2; scope=all ;;
+            level2-api) level=2; scope=api ;;
+            level2-ui) level=2; scope=ui ;;
+            level3) level=3; scope=all ;;
+            level3-api) level=3; scope=api ;;
+            level3-ui) level=3; scope=ui ;;
+            *) echo "Unknown homework scope"; exit 1 ;;
+          esac
+          python3 "../../scripts/run-aqa-level${level}.py" --live --no-build --scope "$scope"
+
+      - name: Upload reports and failure artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqa-results-${{ github.run_id }}-${{ github.run_attempt }}
+          # Homework levels publish only runner-redacted reports/logs and masked screenshots.
+          # Raw HTML/network traces remain local; they may embed authentication data.
+          path: |
+            aqa/restaurant-aqa-framework/TestResults/level1-*/**/*.trx
+            aqa/restaurant-aqa-framework/TestResults/level1-*/summary.json
+            aqa/restaurant-aqa-framework/TestResults/level1-*/run.log
+            aqa/restaurant-aqa-framework/TestResults/level1-*/screenshots/*.png
+            aqa/restaurant-aqa-framework/TestResults/level2-*/**/*.trx
+            aqa/restaurant-aqa-framework/TestResults/level2-*/summary.json
+            aqa/restaurant-aqa-framework/TestResults/level2-*/run.log
+            aqa/restaurant-aqa-framework/TestResults/level2-*/screenshots/*.png
+            aqa/restaurant-aqa-framework/TestResults/level3-*/**/*.trx
+            aqa/restaurant-aqa-framework/TestResults/level3-*/summary.json
+            aqa/restaurant-aqa-framework/TestResults/level3-*/run.log
+            aqa/restaurant-aqa-framework/TestResults/level3-*/screenshots/*.png
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Validate report and write summary
+        if: always()
+        env:
+          RUN_OUTCOME: ${{ steps.run_tests.outcome }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob, os
+          import xml.etree.ElementTree as ET
+
+          print("## AQA run (inspect selected level and actual execution results)")
+          reports = glob.glob("TestResults/**/*.trx", recursive=True)
+          if not reports:
+              print("No TRX report was produced; this is not a passing run.")
+              raise SystemExit(1)
+          total = passed = failed = skipped = 0
+          for path in reports:
+              root = ET.parse(path).getroot()
+              namespace = {"t": root.tag.split("}")[0].strip("{")}
+              counters = root.find(".//t:ResultSummary/t:Counters", namespace)
+              if counters is None:
+                  print("Invalid report: missing counters.")
+                  raise SystemExit(1)
+              total += int(counters.get("total", "0"))
+              passed += int(counters.get("passed", "0"))
+              failed += int(counters.get("failed", "0"))
+              skipped += int(counters.get("notExecuted", "0"))
+          print("| Total | Passed | Failed | Not executed |")
+          print("| ---: | ---: | ---: | ---: |")
+          print(f"| {total} | {passed} | {failed} | {skipped} |")
+          print("Inspect skipped/WIP scenarios separately; skips do not complete homework.")
+          if passed + failed == 0 or failed or os.environ["RUN_OUTCOME"] != "success":
+              raise SystemExit(1)
+          PY
+
+      - name: Preserve failing test status
+        if: always() && steps.run_tests.outcome != 'success'
+        run: exit 1

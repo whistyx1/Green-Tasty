@@ -1,0 +1,14 @@
+{
+  "enabled": false,
+  "server": {
+    "url": "",
+    "project": "",
+    "apiKey": ""
+  },
+  "launch": {
+    "name": "Green-Tasty AQA",
+    "description": "EPAM Marathon end-to-end tests",
+    "debugMode": false,
+    "attributes": ["epam-marathon", "aqa"]
+  }
+}

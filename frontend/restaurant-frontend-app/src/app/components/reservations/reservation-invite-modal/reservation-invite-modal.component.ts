@@ -16,6 +16,7 @@ import { Reservation } from '@app/models/reservations/reservation.model';
 import { GuestInviteService } from '@app/services/reservation/guest-invite.service';
 import { ToastService } from '@app/services/toast/toast.service';
 import { ModalComponent } from '@app/shared/custom-components/modal/modal.component';
+import { preOrderMenuQueryParams } from '@app/shared/helpers/pre-order-navigation';
 
 const MIN_GUESTS_FOR_INVITE = 2;
 
@@ -106,6 +107,8 @@ export class ReservationInviteModalComponent implements OnInit {
 
   onMakePreOrder(): void {
     this.closed.emit();
-    this.router.navigate(['/menu']);
+    void this.router.navigate(['/menu'], {
+      queryParams: preOrderMenuQueryParams(this.reservation()),
+    });
   }
 }

@@ -1,10 +1,9 @@
 # Terraform deployment — DevOps homework option 2
 
-This path replaces Syndicate with Terraform for the existing backend. Use the
-top-level application (`backend/` and `frontend/`); `green-and-tasty/` is the
-separate frontend homework starter. Do not overwrite one with the other.
-
-The root README describes the original Terraform + Syndicate path. **Do not run
+This is the active deployment path for the application in `backend/` and
+`frontend/`. The root README links here; `green-and-tasty/` and the ignored
+`marathon2026-main/` are supplied reference copies, not deployment sources.
+**Do not run
 `syndicate deploy`, `update`, or `clean` against this Terraform-owned deployment.**
 The existing Syndicate metadata remains a reference for the separate lesson path.
 
@@ -28,17 +27,19 @@ Configuration map:
 | `s3.tf`, `cloudfront.tf`, `artifacts.tf` | Website, images, Swagger bucket, deployment packages |
 | `cognito.tf`, `sqs.tf`, `eventbridge.tf` | Authentication, background processing, weekly schedule |
 | `budget.tf` | Optional account-wide monthly spending notification |
+| `aqa-codebuild.tf` | Optional manual AQA CodeBuild project and private artifact access |
 
 Tables use on-demand capacity rather than the lesson's provisioned capacity.
 Each Lambda has 512 MiB and a 100-second timeout; API Gateway integration waits
 at most 29 seconds. No VPC/NAT is needed. Logs expire after 30 days. Weekly email
-starts disabled. AWS provider 6.x is required for `dotnet10`; initialization must
-upgrade the old 5.x lockfile. Commit the regenerated lockfile after review.
+is disabled by default in the example settings, but the original deployment
+verification records that it was later enabled. AWS provider 6.x is required
+for `dotnet10`; the current lockfile already pins provider 6.x.
 
 ## 1. Check the account (read-only)
 
 All commands below are run from the repository root unless stated otherwise.
-Use .NET SDK 10, Python 3, Terraform >=1.10, AWS CLI, and Node matching `.nvmrc`.
+Use .NET SDK 10, Python 3, Terraform >=1.10, AWS CLI, and Node matching `frontend/restaurant-frontend-app/.nvmrc`.
 Set `AWS_PROFILE` if using a non-default profile. Account IDs are discovered
 locally; you do not need to paste them into a conversation.
 
@@ -134,8 +135,9 @@ Guest bearer tokens continue to be checked by the existing guest services.
 
 Use CloudWatch log groups `/aws/lambda/api-handler`, `reports-handler`, and
 `report-sender` to investigate failures. Do not paste passwords/tokens/logs with
-personal data. This deployment does not complete the backend homework: its
-missing owner endpoints still need implementation before the frontend level 3.
+personal data. The Owner endpoints and frontend homework levels are now
+implemented; see the [homework index](../../docs/epam-homework/README.md). A
+deployed API or frontend still needs separate live acceptance after each update.
 
 ## 7. Publish the existing frontend
 

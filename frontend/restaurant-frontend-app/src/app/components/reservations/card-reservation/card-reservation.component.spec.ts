@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { CardReservationComponent } from './card-reservation.component';
 import { API_BASE_URL } from '@app/shared/config/api-base-url.token';
 import { ReservationCustomer, ReservationStatusCustomer } from '@app/models/reservations/reservation.model';
@@ -35,5 +35,25 @@ describe('CardReservationComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('opens the reservation in pre-order mode', () => {
+    const router = TestBed.inject(Router);
+    const navigate = spyOn(router, 'navigate').and.resolveTo(true);
+
+    component.onPreOrder();
+
+    expect(navigate).toHaveBeenCalledOnceWith(['/menu'], {
+      queryParams: {
+        preOrder: 'true',
+        reservationId: 'res-1',
+        reservationLabel: [
+          'Rustaveli Avenue 48',
+          'Table table-1',
+          RESERVATION.startTime.toDateString(),
+          `${RESERVATION.startTime.toLocaleTimeString()} - ${RESERVATION.endTime.toLocaleTimeString()}`,
+        ].join(', '),
+      },
+    });
   });
 });

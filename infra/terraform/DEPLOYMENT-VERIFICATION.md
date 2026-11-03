@@ -1,5 +1,12 @@
 # EPAM DevOps homework — Terraform deployment verification
 
+This is the original DevOps deployment checkpoint. The later backend/frontend
+homework and AQA bonus are documented in the
+[homework index](../../docs/epam-homework/README.md); the
+[2026-11-02 validation record](../../docs/epam-homework/Validation.md) gives
+current local results. Historical limitations below describe what was known at
+this deployment checkpoint, not the final implementation state.
+
 ## Implementation
 
 The deployment uses the existing restaurant application and Terraform to manage
@@ -67,8 +74,9 @@ outside infrastructure state.
 - Registration automatically confirms accounts but does not verify email
   ownership. Cognito can therefore show a confirmed account with an unverified
   email address.
-- The backend/frontend Owner homework features remain separate work. Deploying
-  the application does not implement the missing Owner endpoints or screen.
+- At this original checkpoint, the Owner homework features were separate work.
+  They were subsequently implemented and verified as recorded in the linked
+  homework index.
 - A no-change infrastructure plan does not validate application data, every API
   authorization rule, or all operational behaviors.
 

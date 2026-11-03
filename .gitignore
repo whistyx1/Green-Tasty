@@ -36,3 +36,19 @@ syndicate_venv/
 # Python caches
 __pycache__/
 *.py[cod]
+
+# AQA preparation: safe example is tracked, private .env remains ignored
+!aqa/restaurant-aqa-framework/.env.example
+
+# Attached EPAM snapshot is local reference material
+marathon2026-main/
+.claude/
+
+# ReportPortal agent HTTP diagnostics may contain private response details
+ReportPortal.*.log
+
+# Local validation output at the repository root
+/backend-all-tests.log
+/frontend-all-tests.log
+/frontend-build.log
+/frontend-tests.log

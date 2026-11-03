@@ -1,5 +1,10 @@
 # Frontend display fixes after homework acceptance
 
+> This is a chronological record. Early pending statements below were
+> superseded by later build, publication, screenshot, and regression entries.
+> The [2026-11-02 validation record](Validation.md) gives current local checks.
+
+
 Frontend homework levels 1–3 and Remove Guest bonus passed the documented real API flow before this cleanup. These changes address separate display defects; they do not repeat or replace that acceptance.
 
 ## Changes (version 1.1.5)
@@ -57,3 +62,62 @@ expected for seeded demo dishes without uploaded images. This confirms those
 reported views; no measured375px or exhaustive visual check is claimed.
 See RegressionReview.md for the subsequent full352frontend/271backend passing
 runs and production build. The frontend is still not published to AWS.
+
+## Live visual follow-up, 2026-11-01
+
+After the operator published the frontend and passed all 12 AQA level1 cases
+against CloudFront, two screenshots exposed display issues outside those E2E
+assertions:
+
+- Long `AQA-Sample-...` test dish names could push the price outside a narrow
+  dish card. The name now shrinks and wraps, while the price stays on one line.
+  A Chrome geometry assertion checks the long-name layout at 316px card width.
+- Submitted preorder items displayed `(Unknown)` because the current backend
+  `OrderItemResponse` does not include an item state, while the frontend expected
+  one. The frontend now omits a status that the API did not supply. When state 2
+  is supplied, it uses the backend's actual `Canceled` label. The backend
+  contract remains unchanged.
+
+Focused Angular tests: 12/12 passed. Production build and bundle guard passed.
+The agent uploaded this follow-up build to the existing frontend S3 bucket,
+waited for CloudFront invalidation, and verified that CloudFront's `index.html`
+references the same `main-QEXEBXHQ.js` bundle as the local build. A user-side
+hard refresh remains the final visual check. The screenshots also show
+`AQA-Sample` dishes left by interrupted diagnostics; a read-only AWS count found
+six such dishes and eight six-digit table numbers. Their cleanup requires
+item-level review because the interrupted runs did not journal their IDs.
+
+### Screenshot evidence and menu spacing follow-up
+
+The screenshots supplied for these fixes are organized here:
+
+- [Long dish name and price overflow, before the first fix](screenshots/frontend-live-fixes/menu-price-overflow-before.png)
+- [Submitted cart showing an unknown status, before the first fix](screenshots/frontend-live-fixes/cart-unknown-status-before.png)
+- [Price fixed but unused space on the right of the menu, before the grid fix](screenshots/frontend-live-fixes/menu-price-fixed-grid-gap-before.png)
+- [Balanced menu grid after the fix, confirmed by the operator](screenshots/frontend-live-fixes/menu-balanced-grid-after.png)
+
+The last screenshot shows four fixed-width cards aligned to the left of a wider
+menu row. The menu now uses responsive grid columns so its cards fill the row
+between equal left and right page margins. The narrow-screen card is centered
+within its grid column. A browser geometry test checks the outer spacing.
+
+Verification: the focused menu/card tests passed 8/8 and the full frontend
+Chrome suite passed 356/356. The production build and bundle guard passed. The
+new bundle was uploaded to the existing S3 site bucket; after CloudFront
+invalidation completed, the live homepage referenced the same
+`main-L5FWKTPY.js` file as the local build. The operator refreshed the live
+page and confirmed the spacing; the final screenshot above records that view.
+
+## Booking-success pre-order navigation, 2026-11-02
+
+The booking-success modal's **Make Pre-Order** button previously opened plain
+`/menu`, without the new reservation ID or pre-order mode. The reservation
+card's **Pre-order** button opened `/menu` with both values, so the two paths
+looked different and the new booking's menu could not add dishes to its order.
+Both buttons now use the same query builder and open the reservation-aware
+menu. Focused button tests passed 13/13; the full frontend suite passed
+365/365 and the production build passed its bundle check.
+The build was published to the existing frontend S3 bucket, CloudFront
+invalidation completed, and the live CloudFront index referenced the same
+bundle as the local production build. The operator can visually confirm the
+booking-success button on the next booking.

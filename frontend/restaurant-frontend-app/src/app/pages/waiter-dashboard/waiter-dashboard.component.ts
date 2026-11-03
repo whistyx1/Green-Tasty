@@ -9,13 +9,14 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { catchError, forkJoin, map, Observable, of, switchMap } from 'rxjs';
+import { catchError, forkJoin, from, map, mergeMap, Observable, of, switchMap, toArray } from 'rxjs';
 
 import { AuthenticationService } from '@app/auth/services/authentication.service';
 import { CardReservationComponent } from '@app/components/reservations/card-reservation/card-reservation.component';
 import { TimeSlotsModalComponent } from '@app/components/tables/time-slots-modal/time-slots-modal.component';
 import { WaiterMakeReservationComponent } from '@app/components/tables/make-reservation-waiter/waiter-make-reservation/waiter-make-reservation.component';
 import { CreateOrderRequest } from '@app/models/cart/create-order-request.model';
+import { Order } from '@app/models/orders/order.model';
 import {
   Reservation,
   ReservationCustomer,
@@ -56,6 +57,13 @@ interface ReservationCardViewModel {
   availableTableOptions: string[];
   availableTableOptionsMap: Map<string, string>;
 }
+
+interface PreOrderLookup {
+  order?: Order;
+  failed: boolean;
+}
+
+const MAX_CONCURRENT_RESERVATION_ENRICHMENTS = 3;
 
 const ANY_TABLE_OPTION: SelectOption = {
   text: 'Any Table',
@@ -452,6 +460,30 @@ export class WaiterDashboardComponent implements OnInit {
       });
   }
 
+  retryPreOrder(reservationId: string): void {
+    const reservation = this.reservations().find((item) => item.id === reservationId);
+    if (!reservation?.preOrderLoadError || reservation.preOrderRetrying) return;
+
+    this.reservations.update((items) => items.map((item) =>
+      item.id === reservationId ? { ...item, preOrderRetrying: true } : item
+    ));
+    this.loadPreOrder(reservationId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(({ order, failed }) => {
+        this.reservations.update((items) => items.map((item) =>
+          item.id === reservationId
+            ? {
+              ...item,
+              preOrder: order,
+              preOrderLoadError: failed,
+              preOrderRetrying: false,
+              hasSubmittedPreOrder: order != null && (order.status === 1 || order.status === 3),
+            }
+            : item
+        ));
+      });
+  }
+
   private loadReservations(): void {
     const waiterName = this.waiterName();
 
@@ -461,8 +493,15 @@ export class WaiterDashboardComponent implements OnInit {
         switchMap((reservations) =>
           reservations.length === 0
             ? of([] as ReservationCustomer[])
-            : forkJoin(
-              reservations.map((reservation) => this.enrichReservation(reservation, waiterName))
+            : from(reservations).pipe(
+              mergeMap(
+                (reservation, index) => this.enrichReservation(reservation, waiterName).pipe(
+                  map((enriched) => ({ index, enriched }))
+                ),
+                MAX_CONCURRENT_RESERVATION_ENRICHMENTS
+              ),
+              toArray(),
+              map((rows) => rows.sort((a, b) => a.index - b.index).map((row) => row.enriched))
             )
         ),
         takeUntilDestroyed(this.destroyRef)
@@ -477,6 +516,16 @@ export class WaiterDashboardComponent implements OnInit {
           this.toast.error('Reservations could not be loaded.', 'Reservations');
         },
       });
+  }
+
+  private loadPreOrder(reservationId: string): Observable<PreOrderLookup> {
+    return this.ordersService.getByReservationId(reservationId).pipe(
+      map((order) => ({ order, failed: false })),
+      catchError((error: unknown) => of({
+        order: undefined,
+        failed: !(error instanceof HttpErrorResponse && error.status === 404),
+      }))
+    );
   }
 
   private enrichReservation(
@@ -499,14 +548,7 @@ export class WaiterDashboardComponent implements OnInit {
       )
       : of({ name: waiterName, role: 'Waiter' as const });
 
-    const preOrder$ = this.ordersService.getByReservationId(reservation.id).pipe(
-      catchError((error: unknown) => {
-        if (!(error instanceof HttpErrorResponse) || error.status !== 404) {
-          console.error('Could not load reservation pre-order', error);
-        }
-        return of(undefined);
-      })
-    );
+    const preOrder$ = this.loadPreOrder(reservation.id);
 
     return forkJoin({ feedback: feedback$, creator: creator$, preOrder: preOrder$ }).pipe(
       map(({ feedback, creator, preOrder }) => ({
@@ -516,8 +558,10 @@ export class WaiterDashboardComponent implements OnInit {
         feedback: feedback ?? undefined,
         createdByName: creator.name,
         createdByRole: creator.role,
-        preOrder,
-        hasSubmittedPreOrder: preOrder != null && (preOrder.status === 1 || preOrder.status === 3),
+        preOrder: preOrder.order,
+        preOrderLoadError: preOrder.failed,
+        preOrderRetrying: false,
+        hasSubmittedPreOrder: preOrder.order != null && (preOrder.order.status === 1 || preOrder.order.status === 3),
       }))
     );
   }

@@ -1,5 +1,10 @@
 # How to generate Swagger Documentation
 
+> Legacy Syndicate-only instructions. They do not publish Swagger UI for the
+> active Terraform deployment. The Terraform guide notes that the supplied
+> Swagger spec has an old API URL and needs review before publication.
+
+
 1. Deploy application using AWS Syndicate
 2. Export schema using:
 ```bash

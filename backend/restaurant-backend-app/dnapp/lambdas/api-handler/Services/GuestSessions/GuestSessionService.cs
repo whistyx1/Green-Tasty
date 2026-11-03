@@ -71,7 +71,7 @@ public class GuestSessionService(
             Dishes = [],
         };
 
-        await guestSessionRepository.SaveAsync(session);
+        await guestSessionRepository.CreateAsync(session);
 
         return new CreatGuestSessionResponse(session.Id, Convert.ToBase64String(tokenBytes));
     }
@@ -356,7 +356,7 @@ public class GuestSessionService(
             OwnerUserId = userId,
         };
 
-        await guestSessionRepository.SaveAsync(session);
+        await guestSessionRepository.CreateAsync(session);
     }
 
     public async Task<GetGuestSessionResponse> GetGuestSessionInfoAsync(string guestSessionId)

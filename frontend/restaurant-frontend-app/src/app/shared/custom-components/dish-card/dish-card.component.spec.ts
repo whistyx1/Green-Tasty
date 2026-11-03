@@ -63,4 +63,24 @@ describe('DishCardComponent', () => {
     expect(fixture.nativeElement.querySelector('img').getAttribute('src')).toBe('assets/img/replacement.png');
     expect(fixture.nativeElement.querySelector('.dish-image--placeholder')).toBeNull();
   });
+
+  it('keeps the price inside a narrow card when the dish has a long name', () => {
+    fixture.componentRef.setInput('dish', {
+      ...dish,
+      name: 'AQA-Sample-06156315da4646dda2560e0965cb742e-Salad',
+      imageUrl: null,
+    });
+    fixture.detectChanges();
+
+    const card: HTMLElement = fixture.nativeElement.querySelector('.dish-card');
+    card.style.width = '316px';
+    const name: HTMLElement = card.querySelector('.dish-name')!;
+    const price: HTMLElement = card.querySelector('.dish-price')!;
+    const cardBounds = card.getBoundingClientRect();
+    const nameBounds = name.getBoundingClientRect();
+    const priceBounds = price.getBoundingClientRect();
+
+    expect(priceBounds.right).toBeLessThanOrEqual(cardBounds.right);
+    expect(nameBounds.right).toBeLessThanOrEqual(priceBounds.left);
+  });
 });

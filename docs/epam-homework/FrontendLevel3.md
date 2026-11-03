@@ -1,5 +1,10 @@
 # Frontend homework — level 3 and Remove Guest bonus
 
+> This record includes its original implementation checkpoint. The frontend was
+> later published and rechecked in the [final AQA live regression](aqa/FinalRegression.md)
+> and [UI follow-up](FrontendUiFixes.md). See the
+> [current validation record](Validation.md) for the non-live checks in this review.
+
 ## Scope and acceptance checklist
 
 **Level 3 and Remove Guest bonus complete:** implemented, independently reviewed,

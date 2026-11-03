@@ -75,4 +75,29 @@ describe('SubmittedOrderComponent', () => {
   it('should exclude rejected items from total price', () => {
     expect(component.totalPrice()).toBe(20);
   });
+
+  it('does not invent an item status when the order API omits it', () => {
+    fixture.componentRef.setInput('order', {
+      ...order,
+      orderItems: [{ quantity: 2, dish: { id: 'dish-1', name: 'Salad', price: 8 } }],
+    } as Order);
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toMatch(/2×\s*Salad/);
+    expect(text).not.toContain('(Unknown)');
+    expect(text).not.toContain('(Pending)');
+    expect(component.totalPrice()).toBe(16);
+  });
+
+  it('shows the actual canceled state when the API supplies it', () => {
+    fixture.componentRef.setInput('order', {
+      ...order,
+      orderItems: [{ quantity: 1, state: 2, dish: { id: 'dish-2', name: 'Pasta', price: 14 } }],
+    } as Order);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('(Canceled)');
+    expect(component.totalPrice()).toBe(0);
+  });
 });

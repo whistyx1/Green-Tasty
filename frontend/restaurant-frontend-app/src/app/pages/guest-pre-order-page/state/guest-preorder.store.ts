@@ -6,7 +6,7 @@ import { GuestInvite } from '@app/models/reservations/guest-invite.model';
 import { GuestMenuDish } from '@app/services/guest-sessions/guest-sessions.service';
 import { GuestSessionsService } from '@app/services/guest-sessions/guest-sessions.service';
 
-export type GuestPreorderStatus = 'active' | 'submitted';
+export type GuestPreorderStatus = 'active' | 'submitted' | 'inactive';
 
 export interface GuestInviteVm {
     inviterName: string;
@@ -29,6 +29,8 @@ export interface GuestCartItem {
 @Injectable({ providedIn: 'root' })
 export class GuestPreorderStore {
     private readonly contextId = signal<string | null>(null);
+    private verifiedSessionId: string | null = null;
+    private checkingSession = false;
     private readonly guestInviteService = inject(GuestInviteService);
 
     readonly invite = signal<GuestInvite | null>(null);
@@ -81,7 +83,20 @@ export class GuestPreorderStore {
         if (this.contextId() === id) return;
 
         this.contextId.set(id);
+        this.verifiedSessionId = null;
         void this.loadInviteByToken(id);
+
+        if (localStorage.getItem(this.key(id, 'status')) === 'inactive') {
+            this.clearStorage(id);
+            localStorage.setItem(this.key(id, 'status'), 'inactive');
+            this.status.set('inactive');
+            this.guestSessionId.set(null);
+            this.guestSessionToken.set(null);
+            this.cartItems.set([]);
+            this.menuByCategory.set({});
+            return;
+        }
+        this.status.set('active');
 
         const name = localStorage.getItem(this.key(id, 'guestName'));
         const cartRaw = localStorage.getItem(this.key(id, 'cart'));
@@ -91,6 +106,9 @@ export class GuestPreorderStore {
 
         if (sessionId) this.guestSessionId.set(sessionId);
         if (sessionToken) this.guestSessionToken.set(sessionToken);
+        // A saved session was previously active on this browser. Check it even
+        // if the first menu request after a reload now reports revocation.
+        if (sessionId && sessionToken) this.verifiedSessionId = sessionId;
 
         // If guest was already joined on this device/browser, load menu automatically
         if (this.guestSessionId() && this.guestSessionToken()) {
@@ -213,11 +231,15 @@ export class GuestPreorderStore {
             console.log('[menu response]', res);
             console.log('[menu dishes keys]', Object.keys(res.dishes ?? {}));
 
+            if (this.guestSessionId() !== id || this.status() !== 'active') return;
             this.menuByCategory.set(res.dishes ?? {});
+            this.verifiedSessionId = id;
         } catch (e) {
             console.log('[menu error]', e);
-            this.menuError.set('Failed to load menu');
-            this.menuByCategory.set({});
+            if (!this.invalidateIfRevoked(e, id)) {
+                this.menuError.set('Failed to load menu');
+                this.menuByCategory.set({});
+            }
         } finally {
             this.menuLoading.set(false);
         }
@@ -278,8 +300,9 @@ export class GuestPreorderStore {
         try {
             await firstValueFrom(this.guestSessionsService.submit(sessionId, token));
             this.submitSuccess();
-        } catch {
-            this.cartError.set('Could not submit your pre-order. Please try again.');
+        } catch (error) {
+            if (!this.invalidateIfRevoked(error, sessionId))
+                this.cartError.set('Could not submit your pre-order. Please try again.');
         } finally {
             this.cartBusy.set(false);
         }
@@ -297,22 +320,30 @@ export class GuestPreorderStore {
         const ctx = this.contextId();
         const invite = this.invite();
         const guestName = this.guestName().trim();
-        if (!ctx || !invite?.GroupReservationId || !guestName || this.joinLoading()) return;
-
-        localStorage.removeItem(this.key(ctx, 'cart'));
-        localStorage.removeItem(this.key(ctx, 'guestSessionId'));
-        localStorage.removeItem(this.key(ctx, 'guestSessionToken'));
-
-        this.guestSessionId.set(null);
-        this.guestSessionToken.set(null);
-        this.menuByCategory.set({});
-        this.menuError.set(null);
-        this.menuLoading.set(true);
-        this.cartItems.set([]);
-        this.status.set('active');
+        const previousSessionId = this.guestSessionId();
+        const previousToken = this.guestSessionToken();
+        if (!ctx || !invite?.GroupReservationId || !guestName || this.joinLoading() ||
+            this.status() !== 'submitted' || !previousSessionId || !previousToken) return;
         this.joinLoading.set(true);
 
         try {
+            // A submitted guest can be removed while this success screen is open.
+            // Check that session before the shared invite creates another one.
+            await firstValueFrom(this.guestSessionsService.getSession(previousSessionId, previousToken));
+            if (this.status() !== 'submitted' || this.guestSessionId() !== previousSessionId) return;
+
+            localStorage.removeItem(this.key(ctx, 'cart'));
+            localStorage.removeItem(this.key(ctx, 'guestSessionId'));
+            localStorage.removeItem(this.key(ctx, 'guestSessionToken'));
+            this.guestSessionId.set(null);
+            this.guestSessionToken.set(null);
+            this.verifiedSessionId = null;
+            this.menuByCategory.set({});
+            this.menuError.set(null);
+            this.menuLoading.set(true);
+            this.cartItems.set([]);
+            this.status.set('active');
+
             const session = await firstValueFrom(this.guestSessionsService.createSession({
                 groupReservationId: invite.GroupReservationId,
                 guestName,
@@ -320,8 +351,9 @@ export class GuestPreorderStore {
             this.guestSessionId.set(session.SessionId);
             this.guestSessionToken.set(session.SessionToken);
             await this.loadMenu();
-        } catch {
-            this.menuError.set('Could not start a new pre-order. Please try again.');
+        } catch (error) {
+            if (!this.invalidateIfRevoked(error, previousSessionId))
+                this.menuError.set('Could not start a new pre-order. Please try again.');
         } finally {
             this.menuLoading.set(false);
             this.joinLoading.set(false);
@@ -351,18 +383,57 @@ export class GuestPreorderStore {
             await firstValueFrom(request);
             updateLocalCart();
             return true;
-        } catch {
-            this.cartError.set('Could not update your cart. Please try again.');
+        } catch (error) {
+            if (!this.invalidateIfRevoked(error, sessionId))
+                this.cartError.set('Could not update your cart. Please try again.');
             return false;
         } finally {
             this.cartBusy.set(false);
         }
     }
 
+    async checkSession(): Promise<void> {
+        const id = this.guestSessionId();
+        const token = this.guestSessionToken();
+        if (!id || !token || this.status() === 'inactive' || this.verifiedSessionId !== id || this.checkingSession)
+            return;
+        this.checkingSession = true;
+        try {
+            await firstValueFrom(this.guestSessionsService.getSession(id, token));
+        } catch (error) {
+            this.invalidateIfRevoked(error, id);
+        } finally {
+            this.checkingSession = false;
+        }
+    }
+
+    private invalidateIfRevoked(error: unknown, sessionId: string): boolean {
+        if (!(error instanceof HttpErrorResponse) ||
+            (error.status !== 401 && error.status !== 404) ||
+            this.verifiedSessionId !== sessionId ||
+            this.guestSessionId() !== sessionId)
+            return false;
+        const ctx = this.contextId();
+        if (ctx) {
+            this.clearStorage(ctx);
+            localStorage.setItem(this.key(ctx, 'status'), 'inactive');
+        }
+        this.verifiedSessionId = null;
+        this.status.set('inactive');
+        this.guestSessionId.set(null);
+        this.guestSessionToken.set(null);
+        this.cartItems.set([]);
+        this.menuByCategory.set({});
+        this.cartError.set(null);
+        return true;
+    }
+
     private clearStorage(ctx: string) {
         localStorage.removeItem(this.key(ctx, 'guestName'));
         localStorage.removeItem(this.key(ctx, 'cart'));
         localStorage.removeItem(this.key(ctx, 'status'));
+        localStorage.removeItem(this.key(ctx, 'guestSessionId'));
+        localStorage.removeItem(this.key(ctx, 'guestSessionToken'));
         // cleanup legacy
     }
 

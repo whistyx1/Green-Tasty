@@ -99,11 +99,15 @@ public class GroupPreOrderRepositoryTests : IDisposable
         var context = new Mock<IDynamoDBContext>();
         var search = new Mock<AsyncSearch<GuestSession>>();
         search.Setup(s => s.GetRemainingAsync(It.IsAny<CancellationToken>())).ReturnsAsync([
-            new GuestSession { Id = "owner", GuestName = "Owner", IsOwnerSession = true, Dishes = [] },
-            new GuestSession { Id = "guest", GuestName = "Guest", Dishes = [] }
+            new GuestSession { Id = "owner", GroupReservationId = "group", GuestName = "Owner", IsOwnerSession = true, Dishes = [] },
+            new GuestSession { Id = "guest", GroupReservationId = "group", GuestName = "Guest", Dishes = [] }
         ]);
         context.Setup(c => c.QueryAsync<GuestSession>("group", It.IsAny<QueryConfig>())).Returns(search.Object);
-        Assert.Equal(1, await new APIHandler.Repositories.GuestSessions.GuestSessionRepository(context.Object).CountByGroupReservationId("group"));
+        context.Setup(c => c.LoadAsync<GuestSession?>("owner", It.Is<LoadConfig>(config => config.ConsistentRead == true)))
+            .ReturnsAsync(new GuestSession { Id = "owner", GroupReservationId = "group", GuestName = "Owner", IsOwnerSession = true, Dishes = [] });
+        context.Setup(c => c.LoadAsync<GuestSession?>("guest", It.Is<LoadConfig>(config => config.ConsistentRead == true)))
+            .ReturnsAsync(new GuestSession { Id = "guest", GroupReservationId = "group", GuestName = "Guest", Dishes = [] });
+        Assert.Equal(1, await new APIHandler.Repositories.GuestSessions.GuestSessionRepository(context.Object, _client.Object).CountByGroupReservationId("group"));
     }
 
     private Task Submit() => _repository.SubmitAsync(

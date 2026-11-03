@@ -1,4 +1,10 @@
-@if (store.status() === 'submitted') {
+@if (store.status() === 'inactive') {
+<section class="invite-retry" role="alert">
+    <h1>This guest pre-order is no longer active</h1>
+    <p>Its cart cannot be changed. The reservation owner may have removed this guest.</p>
+    <a routerLink="/main">Return to main page</a>
+</section>
+} @else if (store.status() === 'submitted') {
 <app-guest-preorder-submitted [items]="store.cartItems()" [total]="store.total()" [guestName]="store.guestName()"
     [invite]="store.invite()" (createNew)="store.createNewPreorder()" />
 } @else {
