@@ -7,17 +7,57 @@
   </h3>
 </div>
 
+@if (reservationsLoaded() && reservations().length > 0) {
+  <section class="reservation-filters" aria-label="Filter reservations">
+    <div class="filter-field">
+      <label for="reservation-date-filter">Reservation date</label>
+      <input id="reservation-date-filter" type="date" #dateInput
+        [value]="reservationDateFilter()" (change)="reservationDateFilter.set(dateInput.value)" />
+    </div>
+    <div class="filter-field">
+      <label for="submission-status-filter">Submission status</label>
+      <select id="submission-status-filter" #statusSelect
+        [value]="submissionStatusFilter()" (change)="setSubmissionStatusFilter(statusSelect.value)">
+        <option value="all">All statuses</option>
+        <option value="submitted">Submitted</option>
+        <option value="not-submitted">Not submitted</option>
+      </select>
+    </div>
+    <div class="filter-field">
+      <label for="guest-count-filter">Exact guest count</label>
+      <select id="guest-count-filter" #guestCountSelect
+        [value]="guestCountFilter() ?? ''" (change)="setGuestCountFilter(guestCountSelect.value)">
+        <option value="">Any guest count</option>
+        @for (count of guestCountOptions(); track count) {
+          <option [value]="count">{{ count }}</option>
+        }
+      </select>
+    </div>
+    <label class="filter-toggle">
+      <input type="checkbox" #hideCancelledInput [checked]="hideCancelled()"
+        (change)="hideCancelled.set(hideCancelledInput.checked)" />
+      Hide cancelled reservations
+    </label>
+    <button type="button" class="button button--secondary filter-clear"
+      [disabled]="!hasActiveFilters()" (click)="clearFilters()">Clear filters</button>
+  </section>
+  @if (orderStatusUnavailable()) {
+    <p class="filter-warning" role="alert">Submission status is temporarily unavailable. Status filtering cannot show reliable results.</p>
+  }
+}
+
 @if (!reservationsLoaded()) {
   <p class="reservation-empty">
     Please wait while we load your reservations.
   </p>
-} @else if (reservations().length > 0) {
+} @else if (filteredReservations().length > 0) {
   <ul class="reservation-list">
-    @for (reservation of reservations(); track reservation.id) {
+    @for (reservation of filteredReservations(); track reservation.id) {
       <app-card-reservation
         [r]="reservation"
         [role]="role()"
         [ownerUserId]="customerId()"
+        [submissionState]="submissionState(reservation)"
         [submitLoading]="submissionLoadingId() === reservation.id"
         [statusEnum]="statusEnum"
         (submitSinglePreOrder)="openSubmission($event)"
@@ -28,6 +68,15 @@
       />
     }
   </ul>
+} @else if (reservations().length > 0) {
+  <div class="reservation-empty" role="status">
+    @if (orderStatusUnavailable() && submissionStatusFilter() !== 'all') {
+      <p>Submission status could not be loaded. Clear the status filter and try again later.</p>
+    } @else {
+      <p>No reservations match these filters.</p>
+    }
+    <button type="button" class="button button--secondary" (click)="clearFilters()">Clear filters</button>
+  </div>
 } @else {
   <div class="reservation-empty">
     <img

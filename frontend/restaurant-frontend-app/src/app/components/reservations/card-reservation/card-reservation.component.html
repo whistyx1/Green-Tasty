@@ -129,6 +129,15 @@
         }}
       </span>
     </div>
+
+    @if (submissionState(); as state) {
+      <div class="details-line">
+        <span class="details">
+          <span>{{ r().guestCount > 1 ? 'Final group order:' : 'Pre-order:' }}</span>
+          <strong>{{ state === 'submitted' ? 'Submitted' : state === 'unavailable' ? 'Status unavailable' : 'Not submitted' }}</strong>
+        </span>
+      </div>
+    }
   </div>
 
   <div class="actions">

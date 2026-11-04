@@ -52,6 +52,9 @@ interface ReservationStatusView {
   label: string;
 }
 
+type SubmissionFilter = 'all' | 'submitted' | 'not-submitted';
+type SubmissionState = Exclude<SubmissionFilter, 'all'> | 'unavailable';
+
 @Component({
   selector: 'app-reservation-dashboard',
   standalone: true,
@@ -90,6 +93,33 @@ export class ReservationDashboardComponent implements OnInit {
 
   readonly reservations = signal<ReservationCustomer[]>([]);
   readonly reservationsLoaded = signal(false);
+  readonly reservationDateFilter = signal('');
+  readonly submissionStatusFilter = signal<SubmissionFilter>('all');
+  readonly guestCountFilter = signal<number | null>(null);
+  readonly hideCancelled = signal(false);
+  readonly orderStatusUnavailable = signal(false);
+
+  readonly guestCountOptions = computed(() =>
+    [...new Set(this.reservations().map(item => item.guestCount))]
+      .filter(count => Number.isInteger(count) && count > 0)
+      .sort((a, b) => a - b)
+  );
+  readonly hasActiveFilters = computed(() =>
+    !!this.reservationDateFilter() || this.submissionStatusFilter() !== 'all' ||
+    this.guestCountFilter() !== null || this.hideCancelled()
+  );
+  readonly filteredReservations = computed(() => {
+    const date = this.reservationDateFilter();
+    const status = this.submissionStatusFilter();
+    const guests = this.guestCountFilter();
+    const hideCancelled = this.hideCancelled();
+    return this.reservations().filter(reservation =>
+      (!date || this.localReservationDate(reservation.startTime) === date) &&
+      (status === 'all' || this.submissionState(reservation) === status) &&
+      (guests === null || reservation.guestCount === guests) &&
+      (!hideCancelled || reservation.status !== ReservationStatusCustomer.Cancelled)
+    );
+  });
   readonly submissionLoadingId = signal<string | null>(null);
   readonly submissionOrder = signal<Order | null>(null);
   readonly submittingOrder = signal(false);
@@ -161,6 +191,36 @@ export class ReservationDashboardComponent implements OnInit {
         preOrders: reservation.preOrders,
       };
     });
+
+  submissionState(reservation: ReservationCustomer): SubmissionState {
+    if (this.orderStatusUnavailable()) return 'unavailable';
+    return reservation.preOrder?.status === 1 || reservation.preOrder?.status === 3
+      ? 'submitted' : 'not-submitted';
+  }
+
+  setSubmissionStatusFilter(value: string): void {
+    this.submissionStatusFilter.set(
+      value === 'submitted' || value === 'not-submitted' ? value : 'all'
+    );
+  }
+
+  setGuestCountFilter(value: string): void {
+    const count = Number(value);
+    this.guestCountFilter.set(Number.isInteger(count) && count > 0 ? count : null);
+  }
+
+  clearFilters(): void {
+    this.reservationDateFilter.set('');
+    this.submissionStatusFilter.set('all');
+    this.guestCountFilter.set(null);
+    this.hideCancelled.set(false);
+  }
+
+  private localReservationDate(startTime: Date): string {
+    const date = new Date(startTime);
+    if (!Number.isFinite(date.getTime())) return '';
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
 
   ngOnInit(): void {
     const token = this.authenticationService.getToken();
@@ -579,12 +639,14 @@ export class ReservationDashboardComponent implements OnInit {
 
   private loadReservations(): void {
     this.reservationsLoaded.set(false);
+    this.orderStatusUnavailable.set(false);
 
     forkJoin({
       reservations:
         this.reservationService.getReservationsForUser$(),
       orders: this.ordersService.getPreOrders().pipe(
         catchError((error) => {
+          this.orderStatusUnavailable.set(true);
           console.error('Failed to load pre-orders:', error);
           return of([]);
         }),
@@ -618,7 +680,7 @@ export class ReservationDashboardComponent implements OnInit {
                       const preOrder = orders.find(
                         (order) =>
                           order.reservationId ===
-                          reservation.id,
+                          reservation.id && order.status !== 2,
                       );
 
                       const hasFeedback =

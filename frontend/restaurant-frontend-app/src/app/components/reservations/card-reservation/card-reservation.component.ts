@@ -56,6 +56,7 @@ export class CardReservationComponent implements OnInit {
   readonly role = input<string>(Roles.CUSTOMER);
   readonly ownerUserId = input('');
   readonly submitLoading = input(false);
+  readonly submissionState = input<'submitted' | 'not-submitted' | 'unavailable' | null>(null);
   private readonly now = signal(Date.now());
   readonly copyingInvite = signal(false);
   readonly showInviteAction = computed(() =>
