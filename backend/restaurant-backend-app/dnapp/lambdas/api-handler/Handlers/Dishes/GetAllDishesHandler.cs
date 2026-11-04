@@ -61,7 +61,9 @@ public class GetAllDishesHandler : IApiRequestHandler
                 .GetRemainingAsync();
 
             popularityMap = orders
-                .SelectMany(o => o.Dishes)
+                .Where(order => !string.IsNullOrWhiteSpace(order.ReservationId))
+                .SelectMany(order => order.Dishes ?? [])
+                .Where(item => !string.IsNullOrWhiteSpace(item.DishId))
                 .GroupBy(item => item.DishId)
                 .ToDictionary(g => g.Key, g => g.Count());
         }
