@@ -35,18 +35,21 @@ public class GroupPreOrderRepositoryTests : IDisposable
     [Fact]
     public async Task EnsureOwner_UsesStableConditionalKeyAndRealEmptyCartSerialization()
     {
-        PutItemRequest? saved = null;
-        _client.Setup(c => c.PutItemAsync(It.IsAny<PutItemRequest>(), It.IsAny<CancellationToken>()))
-            .Callback<PutItemRequest, CancellationToken>((request, _) => saved = request).ReturnsAsync(new PutItemResponse());
+        TransactWriteItemsRequest? saved = null;
+        _client.Setup(c => c.TransactWriteItemsAsync(It.IsAny<TransactWriteItemsRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<TransactWriteItemsRequest, CancellationToken>((request, _) => saved = request)
+            .ReturnsAsync(new TransactWriteItemsResponse());
         var owner = await _repository.EnsureOwnerSessionAsync("group", "owner");
         Assert.Equal("owner-group", owner.Id);
         Assert.Null(owner.SessionTokenHash);
-        Assert.Equal("attribute_not_exists(guestSessionId)", saved!.ConditionExpression);
-        Assert.Equal("owner-group", saved.Item["guestSessionId"].S);
+        Assert.Equal(2, saved!.TransactItems.Count);
+        Assert.Equal("attribute_not_exists(guestSessionId)", saved.TransactItems[0].Put.ConditionExpression);
+        Assert.Equal("owner-group", saved.TransactItems[0].Put.Item["guestSessionId"].S);
         // Match the application's default V1 conversion: booleans are numeric 1/0.
-        Assert.Equal("1", saved.Item["isOwnerSession"].N);
-        Assert.Empty(saved.Item["dishes"].L);
-        Assert.Equal("0", saved.Item["isSubmitted"].N);
+        Assert.Equal("1", saved.TransactItems[0].Put.Item["isOwnerSession"].N);
+        Assert.Empty(saved.TransactItems[0].Put.Item["dishes"].L);
+        Assert.Equal("0", saved.TransactItems[0].Put.Item["isSubmitted"].N);
+        Assert.Contains("participantRevision", saved.TransactItems[1].Update.ExpressionAttributeNames.Values);
     }
 
     [Fact]
@@ -88,11 +91,77 @@ public class GroupPreOrderRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task CloseWithoutOrder_ChecksEveryParticipantAndMembershipRevisionWithoutWritingOrders()
+    {
+        TransactWriteItemsRequest? saved = null;
+        _client.Setup(c => c.TransactWriteItemsAsync(It.IsAny<TransactWriteItemsRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<TransactWriteItemsRequest, CancellationToken>((request, _) => saved = request)
+            .ReturnsAsync(new TransactWriteItemsResponse());
+        var (_, group, reservation, _) = OwnerContext();
+        group.ParticipantRevision = 4;
+        var owner = new GuestSession { Id = "owner-group", GroupReservationId = "group", GuestName = "Owner",
+            IsOwnerSession = true, OwnerUserId = "owner", OrderingPreference = "InRestaurant", Dishes = [] };
+        var guest = new GuestSession { Id = "guest", GroupReservationId = "group", GuestName = "Guest",
+            OrderingPreference = "InRestaurant", Dishes = [new OrderItem { DishId = "salad", Quantity = 1 }] };
+
+        await _repository.CloseWithoutOrderAsync(group, reservation, [owner, guest]);
+
+        Assert.Equal(4, saved!.TransactItems.Count);
+        var groupWrite = saved.TransactItems[0].Update;
+        Assert.Contains("onlinePreOrderClosed = :true", groupWrite.UpdateExpression);
+        Assert.Contains("#revision = :expectedRevision", groupWrite.ConditionExpression);
+        Assert.Equal("4", groupWrite.ExpressionAttributeValues[":expectedRevision"].N);
+        Assert.All(saved.TransactItems.Skip(2), item =>
+            Assert.Equal("InRestaurant", item.ConditionCheck.ExpressionAttributeValues[":preference"].S));
+        Assert.DoesNotContain(saved.TransactItems, item => item.Update?.TableName == "test-orders");
+    }
+
+    [Fact]
+    public async Task Submit_RejectsChangedMembershipRevisionWithinTransaction()
+    {
+        TransactWriteItemsRequest? saved = null;
+        _client.Setup(c => c.TransactWriteItemsAsync(It.IsAny<TransactWriteItemsRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<TransactWriteItemsRequest, CancellationToken>((request, _) => saved = request)
+            .ThrowsAsync(new TransactionCanceledException("membership changed") {
+                CancellationReasons = [new CancellationReason { Code = "ConditionalCheckFailed" }] });
+
+        await Assert.ThrowsAsync<GroupPreOrderConflictException>(() => Submit());
+
+        Assert.Contains("attribute_not_exists(#revision)", saved!.TransactItems[1].Update.ConditionExpression);
+        Assert.Equal("0", saved.TransactItems[1].Update.ExpressionAttributeValues[":expectedRevision"].N);
+    }
+
+    [Fact]
+    public async Task Submit_ConditionChecksInRestaurantParticipantsAsWellAsSubmittedGuests()
+    {
+        TransactWriteItemsRequest? saved = null;
+        _client.Setup(c => c.TransactWriteItemsAsync(It.IsAny<TransactWriteItemsRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<TransactWriteItemsRequest, CancellationToken>((request, _) => saved = request)
+            .ReturnsAsync(new TransactWriteItemsResponse());
+        var (_, group, reservation, order) = OwnerContext();
+        group.ParticipantRevision = 2;
+        var online = new GuestSession { Id = "online", GroupReservationId = "group", GuestName = "Online",
+            IsSubmitted = true, Dishes = [new OrderItem { DishId = "salad", Quantity = 1 }] };
+        var inRestaurant = new GuestSession { Id = "restaurant", GroupReservationId = "group", GuestName = "Restaurant",
+            OrderingPreference = "InRestaurant", Dishes = [], Revision = 3 };
+
+        await _repository.SubmitAsync(order, group, reservation,
+            [new OrderItem { DishId = "salad", Quantity = 1 }], [online, inRestaurant]);
+
+        Assert.Equal(5, saved!.TransactItems.Count);
+        Assert.Equal("2", saved.TransactItems[1].Update.ExpressionAttributeValues[":expectedRevision"].N);
+        Assert.Contains("attribute_not_exists(orderingPreference)", saved.TransactItems[3].ConditionCheck.ConditionExpression);
+        Assert.Equal("InRestaurant", saved.TransactItems[4].ConditionCheck.ExpressionAttributeValues[":preference"].S);
+        Assert.Contains("revision = :revision", saved.TransactItems[4].ConditionCheck.ConditionExpression);
+    }
+
+    [Fact]
     public async Task EnsureOwner_ConcurrentCreationReturnsStronglyConsistentExistingOwner()
     {
         var context = new Mock<IDynamoDBContext>();
         context.Setup(c => c.ToDocument(It.IsAny<GuestSession>(), It.IsAny<ToDocumentConfig>())).Returns(_context.ToDocument(new GuestSession { Id = "owner-group", GuestName = "Owner", Dishes = [] }, new ToDocumentConfig { OverrideTableName = "test-sessions" }));
-        _client.Setup(c => c.PutItemAsync(It.IsAny<PutItemRequest>(), It.IsAny<CancellationToken>())).ThrowsAsync(new ConditionalCheckFailedException("already created"));
+        _client.Setup(c => c.TransactWriteItemsAsync(It.IsAny<TransactWriteItemsRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TransactionCanceledException("already created") { CancellationReasons = [new CancellationReason { Code = "ConditionalCheckFailed" }] });
         var existing = new GuestSession { Id = "owner-group", GroupReservationId = "group", GuestName = "Owner", Dishes = [], IsOwnerSession = true, OwnerUserId = "owner" };
         context.Setup(c => c.LoadAsync<GuestSession>("owner-group", It.Is<LoadConfig>(config => config.ConsistentRead == true), It.IsAny<CancellationToken>())).ReturnsAsync(existing);
         Assert.Same(existing, await new GroupPreOrderRepository(_client.Object, context.Object).EnsureOwnerSessionAsync("group", "owner"));

@@ -118,6 +118,127 @@ describe('Group order page state and lifecycle', () => {
     pending.complete();
   });
 
+  it('explains that an all-In-Restaurant group needs no online submission and keeps the reservation active', () => {
+    const snapshot = structuredClone(SESSIONS);
+    snapshot.participants[0].orderingPreference = 'InRestaurant';
+    snapshot.participants[0].isSubmitted = false;
+    snapshot.participants.push({
+      id: 'guest',
+      type: 'Guest',
+      name: 'Guest',
+      orderingPreference: 'InRestaurant',
+      isSubmitted: false,
+      total: 0,
+      items: [],
+    });
+    service.getSessions$.and.returnValue(of(snapshot));
+    const { fixture, element } = create();
+
+    expect(button(element, 'Submit Pre-Order')).toBeUndefined();
+    expect(element.querySelector('.order-summary [role="status"]')?.textContent).toContain(
+      'No online pre-order is needed. Your table reservation remains active.'
+    );
+    expect(element.textContent).toContain('Collecting pre-orders');
+    fixture.componentInstance.openConfirmation();
+    fixture.componentInstance.submit();
+    expect(service.submit$).not.toHaveBeenCalled();
+  });
+
+  it('blocks final submission while an Online guest is pending and counts the owner once', () => {
+    const snapshot = structuredClone(SESSIONS);
+    snapshot.participants.push({
+      id: 'guest', type: 'Guest', name: 'Guest', orderingPreference: 'Online',
+      isSubmitted: false, total: 0, items: [],
+    });
+    service.getSessions$.and.returnValue(of(snapshot));
+    const { fixture, element } = create();
+
+    expect(element.querySelector('.progress-count')?.textContent).toContain('1 of 2 Online participants submitted');
+    expect(element.querySelector('.group-progress')?.textContent).toContain('Online Pending');
+    expect(button(element, 'Submit Pre-Order')?.disabled).toBeTrue();
+    button(element, 'Submit Pre-Order')?.click();
+    fixture.detectChanges();
+    expect(element.querySelector('[role="dialog"]')).toBeNull();
+    expect(service.submit$).not.toHaveBeenCalled();
+  });
+
+  it('excludes In Restaurant guests from progress and lets a ready Online owner finalize', () => {
+    const snapshot = structuredClone(SESSIONS);
+    snapshot.participants.push({
+      id: 'guest', type: 'Guest', name: 'Guest', orderingPreference: 'InRestaurant',
+      isSubmitted: false, total: 0, items: [],
+    });
+    service.getSessions$.and.returnValue(of(snapshot));
+    const { element } = create();
+
+    expect(element.querySelector('.progress-count')?.textContent).toContain('1 of 1 Online participants submitted');
+    expect(element.querySelector('.group-progress')?.textContent).toContain('In Restaurant');
+    expect(button(element, 'Submit Pre-Order')?.disabled).toBeFalse();
+  });
+
+  it('closes an all-In-Restaurant online workflow once without sending an order', () => {
+    const snapshot = structuredClone(SESSIONS);
+    snapshot.participants[0].orderingPreference = 'InRestaurant';
+    snapshot.participants[0].isSubmitted = false;
+    service.getSessions$.and.returnValue(of(snapshot));
+    const pending = new Subject<import('@app/models/group-orders/submit-group-pre-order.model').SubmittedDish[]>();
+    service.submit$.and.returnValue(pending);
+    const { fixture, element } = create();
+
+    button(element, 'Close Online Pre-Order')?.click();
+    fixture.detectChanges();
+    button(element.querySelector('[role="dialog"]')!, 'Cancel')?.click();
+    fixture.detectChanges();
+    expect(service.submit$).not.toHaveBeenCalled();
+
+    button(element, 'Close Online Pre-Order')?.click();
+    fixture.detectChanges();
+    const dialog = element.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).toContain('without sending an order');
+    button(dialog, 'Confirm')?.click();
+    button(dialog, 'Confirm')?.click();
+    expect(service.submit$).toHaveBeenCalledOnceWith('group', 'reservation');
+    pending.next([]);
+    pending.complete();
+    fixture.detectChanges();
+
+    expect(element.textContent).toContain('Online pre-order closed. Your table reservation remains active.');
+    expect(element.querySelector('.progress-count')?.textContent).toContain('0 of 0 Online participants submitted');
+    expect(button(element, 'Close Online Pre-Order')).toBeUndefined();
+    expect(button(element, 'Submit Pre-Order')).toBeUndefined();
+  });
+
+  it('restores the closed online-workflow message and progress after a page reload', () => {
+    const snapshot = structuredClone(SESSIONS);
+    snapshot.participants[0].orderingPreference = 'InRestaurant';
+    snapshot.participants[0].isSubmitted = false;
+    service.getSessions$.and.returnValue(of(snapshot));
+    service.getStatus$.and.returnValue(of({ currentParticipants: 1, maxCapacity: 4,
+      status: 'Closed', onlinePreOrderClosed: true }));
+
+    const { element } = create();
+
+    expect(element.textContent).toContain('Online pre-order closed. Your table reservation remains active.');
+    expect(element.querySelector('.progress-count')?.textContent).toContain('0 of 0 Online participants submitted');
+    expect(button(element, 'Close Online Pre-Order')).toBeUndefined();
+  });
+
+  it('keeps the submitted owner in progress after a finalized group reload', () => {
+    const snapshot = structuredClone(SESSIONS);
+    snapshot.ownerPreOrder = undefined;
+    snapshot.submittedOrder = {
+      items: [{ dish: { id: 'salad', name: 'Salad', price: 8 }, quantity: 1 }],
+      total: 8,
+    };
+    service.getSessions$.and.returnValue(of(snapshot));
+    service.getStatus$.and.returnValue(of({ currentParticipants: 1, maxCapacity: 4, status: 'Submitted' }));
+
+    const { element } = create();
+
+    expect(element.querySelector('.progress-count')?.textContent).toContain('1 of 1 Online participants submitted');
+    expect(element.querySelector('.group-progress')?.textContent).toContain('Online Submitted');
+  });
+
   it('shows loading while the invite is pending, then displays the response', () => {
     const invitation = new Subject<GuestInvite>();
     service.getGroupInvite$.and.returnValue(invitation);

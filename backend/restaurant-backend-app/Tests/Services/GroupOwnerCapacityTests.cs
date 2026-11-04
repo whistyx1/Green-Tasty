@@ -1,4 +1,5 @@
 using APIHandler.Entities;
+using APIHandler.Constants;
 using APIHandler.Repositories.Auth;
 using APIHandler.Repositories.Dishes;
 using APIHandler.Repositories.GroupReservations;
@@ -10,6 +11,28 @@ using Moq;
 namespace APIHandler.Tests.Services;
 public class GroupOwnerCapacityTests
 {
+    [Theory]
+    [InlineData(ReservationStatus.Reserved, true)]
+    [InlineData(ReservationStatus.Cancelled, false)]
+    public async Task Status_ReportsOnlineClosureOnlyWhileTableReservationRemainsActive(
+        ReservationStatus reservationStatus, bool expected)
+    {
+        var groups = new Mock<IGroupReservationRepository>();
+        var reservations = new Mock<IReservationRepository>();
+        groups.Setup(r => r.GetGroupReservationByIdAsync("group")).ReturnsAsync(new GroupReservation {
+            GroupReservationId = "group", ReservationId = "reservation", ReservationToken = "token",
+            Status = GroupReservationStatus.Closed, OnlinePreOrderClosed = true });
+        reservations.Setup(r => r.GetReservationByIdAsync("reservation")).ReturnsAsync(new Reservation {
+            Id = "reservation", WaiterId = "waiter", TableId = "table", Status = reservationStatus });
+        var service = new GuestSessionService(groups.Object, Mock.Of<IGuestSessionRepository>(),
+            Mock.Of<IDishRepository>(), reservations.Object, Mock.Of<IUserRepository>(), Mock.Of<ITableRepository>());
+
+        var status = await service.GetGroupReservationStatusAsync("group");
+
+        Assert.Equal(expected, status.OnlinePreOrderClosed);
+        Assert.Equal(GroupReservationStatus.Closed, status.Status);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

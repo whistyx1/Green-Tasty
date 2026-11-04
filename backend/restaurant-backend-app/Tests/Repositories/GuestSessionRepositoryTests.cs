@@ -96,6 +96,50 @@ public class GuestSessionRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task GetAllConsistent_PaginatesBaseTableAndReloadsCurrentSessions()
+    {
+        var context = new Mock<IDynamoDBContext>();
+        context.Setup(value => value.LoadAsync<GuestSession?>("first", It.Is<LoadConfig>(config => config.ConsistentRead == true)))
+            .ReturnsAsync(Session("first"));
+        context.Setup(value => value.LoadAsync<GuestSession?>("second", It.Is<LoadConfig>(config => config.ConsistentRead == true)))
+            .ReturnsAsync(Session("second"));
+        var cursor = new Dictionary<string, AttributeValue> { ["guestSessionId"] = new() { S = "first" } };
+        var requests = new List<ScanRequest>();
+        var pages = new Queue<ScanResponse>([
+            new() { Items = [new() { ["guestSessionId"] = new AttributeValue { S = "first" } }], LastEvaluatedKey = cursor },
+            new() { Items = [new() { ["guestSessionId"] = new AttributeValue { S = "second" } }], LastEvaluatedKey = [] }
+        ]);
+        _client.Setup(value => value.ScanAsync(It.IsAny<ScanRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<ScanRequest, CancellationToken>((request, _) => requests.Add(request))
+            .ReturnsAsync(() => pages.Dequeue());
+
+        var result = await new GuestSessionRepository(context.Object, _client.Object)
+            .GetAllByGroupReservationIdConsistentAsync("group");
+
+        Assert.Equal(["first", "second"], result.Select(session => session.Id));
+        Assert.Equal(2, requests.Count);
+        Assert.All(requests, request => Assert.True(request.ConsistentRead));
+        Assert.Equal("first", requests[1].ExclusiveStartKey["guestSessionId"].S);
+    }
+
+    [Fact]
+    public async Task Create_AddsSessionAndIncrementsMembershipRevisionAtomically()
+    {
+        var session = Session("new");
+        TransactWriteItemsRequest? request = null;
+        _client.Setup(value => value.TransactWriteItemsAsync(It.IsAny<TransactWriteItemsRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<TransactWriteItemsRequest, CancellationToken>((value, _) => request = value)
+            .ReturnsAsync(new TransactWriteItemsResponse());
+
+        await new GuestSessionRepository(_serializer, _client.Object).CreateAsync(session);
+
+        Assert.Equal(2, request!.TransactItems.Count);
+        Assert.Equal("new", request.TransactItems[0].Put.Item["guestSessionId"].S);
+        Assert.Contains("participantRevision", request.TransactItems[1].Update.ExpressionAttributeNames.Values);
+        Assert.Contains("#status = :open", request.TransactItems[1].Update.ConditionExpression);
+    }
+
+    [Fact]
     public async Task Save_UsesRevisionAndOpenGroupTransaction()
     {
         var guest = Session("guest");

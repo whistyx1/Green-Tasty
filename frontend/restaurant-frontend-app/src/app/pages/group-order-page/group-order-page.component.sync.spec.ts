@@ -98,6 +98,9 @@ describe('Рівень 3 · синхронізація', () => {
   }));
 
   it('після Submit синхронізація зупиняється', fakeAsync(() => {
+    const ready = structuredClone(SESSIONS);
+    ready.participants[1].isSubmitted = true;
+    service.getSessions$.and.returnValue(of(ready));
     service.submit$.and.returnValue(of([{ dishId: 'dish1', quantity: 1 }]));
     const { fixture, element } = create();
     buttonByText(element, 'Submit Pre-Order')?.click();

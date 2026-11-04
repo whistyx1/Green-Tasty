@@ -57,6 +57,21 @@ public class GroupPreOrderHandlerTests
         Assert.Equal(3, dish.GetProperty("quantity").GetInt32());
     }
 
+    [Fact]
+    public async Task Submit_AllInRestaurantCompletionReturnsEmptyArrayWithoutChangingTheRoute()
+    {
+        _service.Setup(s => s.SubmitAsync("owner", "group", "reservation"))
+            .ReturnsAsync([]);
+
+        var response = await new SubmitGroupPreOrderHandler(_service.Object)
+            .HandleRequest(Request(), _context);
+
+        Assert.Equal(200, response.StatusCode);
+        using var body = JsonDocument.Parse(response.Body);
+        Assert.Empty(body.RootElement.EnumerateArray());
+        _service.Verify(s => s.SubmitAsync("owner", "group", "reservation"), Times.Once);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

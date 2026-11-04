@@ -148,6 +148,15 @@ describe('Group orders real API read-model integration', () => {
     expect(result[0].dish?.price).toBe(8);
   });
 
+  it('accepts an empty all-In-Restaurant completion without reading or creating an order', () => {
+    let result: import('@app/models/group-orders/submit-group-pre-order.model').SubmittedDish[] | undefined;
+    service.submit$('group', 'reservation').subscribe((value) => (result = value));
+    http.expectOne(`${BASE}/group-reservations/group/submit`).flush([]);
+
+    expect(result).toEqual([]);
+    http.expectNone(`${BASE}/orders/reservation`);
+  });
+
   it('does not retry or reject an already committed mutation when the final read fails', () => {
     let result: import('@app/models/group-orders/submit-group-pre-order.model').SubmittedDish[] =
       [];

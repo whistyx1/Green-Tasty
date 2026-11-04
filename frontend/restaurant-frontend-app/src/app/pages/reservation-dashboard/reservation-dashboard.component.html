@@ -9,37 +9,48 @@
 
 @if (reservationsLoaded() && reservations().length > 0) {
   <section class="reservation-filters" aria-label="Filter reservations">
-    <div class="filter-field">
-      <label for="reservation-date-filter">Reservation date</label>
-      <input id="reservation-date-filter" type="date" #dateInput
-        [value]="reservationDateFilter()" (change)="reservationDateFilter.set(dateInput.value)" />
+    <div class="filter-heading">
+      <div class="filter-title">
+        <h2>Filter reservations</h2>
+        <span class="filter-count">{{ filteredReservations().length }} of {{ reservations().length }}</span>
+      </div>
+      @if (filteredReservations().length > 0) {
+        <button type="button" class="filter-clear"
+          [disabled]="!hasActiveFilters()" (click)="clearFilters()">Clear filters</button>
+      }
     </div>
-    <div class="filter-field">
-      <label for="submission-status-filter">Submission status</label>
-      <select id="submission-status-filter" #statusSelect
-        [value]="submissionStatusFilter()" (change)="setSubmissionStatusFilter(statusSelect.value)">
-        <option value="all">All statuses</option>
-        <option value="submitted">Submitted</option>
-        <option value="not-submitted">Not submitted</option>
-      </select>
+    <div class="filter-controls">
+      <div class="filter-field">
+        <label for="reservation-date-filter">Reservation date</label>
+        <input id="reservation-date-filter" type="date" #dateInput
+          [value]="reservationDateFilter()" (change)="reservationDateFilter.set(dateInput.value)" />
+      </div>
+      <div class="filter-field">
+        <label for="submission-status-filter">Submission status</label>
+        <select id="submission-status-filter" #statusSelect
+          [value]="submissionStatusFilter()" (change)="setSubmissionStatusFilter(statusSelect.value)">
+          <option value="all">All statuses</option>
+          <option value="submitted">Submitted</option>
+          <option value="not-submitted">Not submitted</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="guest-count-filter">Exact guest count</label>
+        <select id="guest-count-filter" #guestCountSelect
+          [value]="guestCountFilter() ?? ''" (change)="setGuestCountFilter(guestCountSelect.value)">
+          <option value="">Any guest count</option>
+          @for (count of guestCountOptions(); track count) {
+            <option [value]="count">{{ count }}</option>
+          }
+        </select>
+      </div>
+      <label class="filter-toggle">
+        <input type="checkbox" #hideCancelledInput [checked]="hideCancelled()"
+          (change)="hideCancelled.set(hideCancelledInput.checked)" />
+        <span class="filter-switch" aria-hidden="true"></span>
+        <span>Hide cancelled</span>
+      </label>
     </div>
-    <div class="filter-field">
-      <label for="guest-count-filter">Exact guest count</label>
-      <select id="guest-count-filter" #guestCountSelect
-        [value]="guestCountFilter() ?? ''" (change)="setGuestCountFilter(guestCountSelect.value)">
-        <option value="">Any guest count</option>
-        @for (count of guestCountOptions(); track count) {
-          <option [value]="count">{{ count }}</option>
-        }
-      </select>
-    </div>
-    <label class="filter-toggle">
-      <input type="checkbox" #hideCancelledInput [checked]="hideCancelled()"
-        (change)="hideCancelled.set(hideCancelledInput.checked)" />
-      Hide cancelled reservations
-    </label>
-    <button type="button" class="button button--secondary filter-clear"
-      [disabled]="!hasActiveFilters()" (click)="clearFilters()">Clear filters</button>
   </section>
   @if (orderStatusUnavailable()) {
     <p class="filter-warning" role="alert">Submission status is temporarily unavailable. Status filtering cannot show reliable results.</p>
@@ -69,13 +80,19 @@
     }
   </ul>
 } @else if (reservations().length > 0) {
-  <div class="reservation-empty" role="status">
+  <div class="filter-empty" role="status">
+    <span class="filter-empty-icon" aria-hidden="true">
+      <img src="assets/svg/search.svg" alt="" />
+    </span>
     @if (orderStatusUnavailable() && submissionStatusFilter() !== 'all') {
-      <p>Submission status could not be loaded. Clear the status filter and try again later.</p>
+      <h2>Submission status unavailable</h2>
+      <p>Submission status could not be loaded. Try again later or clear your filters.</p>
     } @else {
-      <p>No reservations match these filters.</p>
+      <h2>No reservations match these filters.</h2>
+      <p>Try another date, status, or guest count.</p>
     }
-    <button type="button" class="button button--secondary" (click)="clearFilters()">Clear filters</button>
+    <button type="button" class="button button--secondary button--small filter-empty-reset"
+      (click)="clearFilters()">Clear filters</button>
   </div>
 } @else {
   <div class="reservation-empty">

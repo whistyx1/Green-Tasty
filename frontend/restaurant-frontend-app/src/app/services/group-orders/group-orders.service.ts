@@ -186,6 +186,7 @@ export class GroupOrdersService {
       >(`${this.baseUrl}/group-reservations/${encodeURIComponent(groupId)}/submit`, body)
       .pipe(
         switchMap((submitted) => {
+          if (submitted.length === 0) return of(submitted);
           const context = this.groups.get(groupId);
           if (!context) return of(submitted);
           return this.http

@@ -171,7 +171,8 @@ public class GuestSessionService(
         {
             CurrentParticipants = currentParticipants,
             MaxCapacity = reservation.GuestCount,
-            Status = group.Status
+            Status = group.Status,
+            OnlinePreOrderClosed = group.OnlinePreOrderClosed && reservation.Status == ReservationStatus.Reserved
         };
     }
 
@@ -180,7 +181,7 @@ public class GuestSessionService(
     {
         await ValidateReservationOwnerAsync(groupReservationId, userId);
 
-        var sessions = await guestSessionRepository.GetAllByGroupReservationIdAsync(groupReservationId);
+        var sessions = await guestSessionRepository.GetAllByGroupReservationIdConsistentAsync(groupReservationId);
         return await BuildSnapshotAsync(userId, sessions);
     }
 

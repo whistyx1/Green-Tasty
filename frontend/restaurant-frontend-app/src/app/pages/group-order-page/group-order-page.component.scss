@@ -116,6 +116,21 @@
   padding-top: 20px;
 }
 
+.group-progress {
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid color.$sage-100;
+  border-radius: 16px;
+  background: color.$neutral-0;
+
+  h2 { margin: 0 0 8px; font-size: 18px; }
+  .progress-count { margin: 0 0 16px; color: color.$green-800; font-weight: 600; }
+  ul { margin: 0; padding: 0; list-style: none; }
+  li { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 16px;
+    padding: 10px 0; border-top: 1px solid color.$sage-100; }
+  li span:first-child { overflow-wrap: anywhere; }
+}
+
 .grand-total {
   display: flex;
   align-items: baseline;

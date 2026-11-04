@@ -14,4 +14,7 @@ public class GroupReservationStatusResponse
     [JsonPropertyName("status")]
     [JsonConverter(typeof(JsonStringEnumConverter<GroupReservationStatus>))]
     public GroupReservationStatus Status { get; set; }
+
+    [JsonPropertyName("onlinePreOrderClosed")]
+    public bool OnlinePreOrderClosed { get; set; }
 }

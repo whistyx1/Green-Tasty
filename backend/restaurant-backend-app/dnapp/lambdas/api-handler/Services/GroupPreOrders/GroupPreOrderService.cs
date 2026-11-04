@@ -106,29 +106,41 @@ public class GroupPreOrderService(
             throw new ValidationException("Reservation does not belong to this group.");
         if (group.Status != GroupReservationStatus.Open || reservation.Status != ReservationStatus.Reserved)
             throw new GroupPreOrderConflictException("Only an open group with an active reservation can be submitted.");
+        var allSessions = await sessions.GetAllByGroupReservationIdConsistentAsync(groupReservationId);
+        var ownerSessions = allSessions.Where(s => s.IsOwnerSession).ToArray();
+        if (ownerSessions.Length != 1 || ownerSessions[0].OwnerUserId != userId)
+            throw new GroupPreOrderConflictException("Owner session changed; reload the group before finalizing.");
+        if (allSessions.Count > 97) throw new ValidationException("Too many participants for one group order.");
+        var online = allSessions.Where(s => OrderingPreference.Effective(s.OrderingPreference) == OrderingPreference.Online).ToList();
+        if (online.Count == 0)
+        {
+            if ((clock ?? TimeProvider.System).GetUtcNow().UtcDateTime >= reservation.EndTime.ToUniversalTime())
+                throw new GroupPreOrderConflictException("The reservation has expired; the online pre-order cannot be closed.");
+            var existingOrder = await orders.GetOrderByReservationIdAsync(reservation.Id);
+            if (existingOrder != null && (existingOrder.CustomerId != userId || existingOrder.ReservationId != reservation.Id ||
+                existingOrder.Status != OrderStatus.Created || existingOrder.GroupFinalized || existingOrder.OwnerGroupReady))
+                throw new GroupPreOrderConflictException("The owner order changed; reload before closing the online pre-order.");
+            await persistence.CloseWithoutOrderAsync(group, reservation, allSessions);
+            return [];
+        }
         if ((clock ?? TimeProvider.System).GetUtcNow().UtcDateTime >= reservation.StartTime.ToUniversalTime().AddMinutes(-30))
             throw new ValidationException("Pre-orders can only be modified up to 30 minutes before the reservation start time.");
-        var allSessions = await sessions.GetAllByGroupReservationIdAsync(groupReservationId);
-        var submitted = allSessions.Where(s => s.IsSubmitted &&
-            OrderingPreference.Effective(s.OrderingPreference) == OrderingPreference.Online).ToList();
-        if (submitted.Count == 0) throw new ValidationException("No submitted sessions.");
-        if (submitted.Any(s => s.Dishes == null)) throw new ValidationException("A submitted cart has missing dishes; reload the cart before submitting.");
-        var guestDishes = submitted.Where(s => !s.IsOwnerSession).SelectMany(s => s.Dishes ?? []).ToList();
-        if (submitted.Count > 97) throw new ValidationException("Too many submitted sessions for one group order.");
+        if (online.Any(s => !s.IsSubmitted))
+            throw new GroupPreOrderConflictException("All Online participants must submit a nonempty pre-order before finalization.");
+        if (online.Any(s => !s.IsOwnerSession && s.Dishes is not { Count: > 0 }))
+            throw new ValidationException("Every Online guest must submit a nonempty pre-order.");
+        var guestDishes = online.Where(s => !s.IsOwnerSession).SelectMany(s => s.Dishes ?? []).ToList();
         if (guestDishes.Any(d => string.IsNullOrWhiteSpace(d.DishId) || d.Quantity <= 0))
             throw new ValidationException("Submitted dishes must have a valid ID and positive quantity.");
         var ids = guestDishes.Select(d => d.DishId).Distinct().ToArray();
         var available = (await dishes.GetDishesByIdsAsync(ids)).ToDictionary(d => d.Id);
         if (ids.Any(id => !available.TryGetValue(id, out var dish) || dish.State != DishState.Available))
             throw new ValidationException("A submitted dish is missing or unavailable.");
-        var ownerSessions = allSessions.Where(s => s.IsOwnerSession && s.OwnerUserId == userId).ToArray();
-        if (ownerSessions.Length > 1)
-            throw new GroupPreOrderConflictException("Multiple owner sessions exist; resolve them before finalizing.");
-        var owner = ownerSessions.SingleOrDefault();
+        var owner = ownerSessions[0];
         var order = await orders.GetOrderByReservationIdAsync(reservation.Id);
         if (order is null)
         {
-            if (owner?.IsSubmitted == true)
+            if (owner.IsSubmitted)
                 throw new GroupPreOrderConflictException("Owner pre-order changed; reload the group.");
             if (guestDishes.Count == 0) throw new ValidationException("Submitted sessions have no dishes.");
             // The owner may order at the restaurant while guests submit online. The
@@ -146,13 +158,22 @@ public class GroupPreOrderService(
             throw new ActionForbiddenException("Order does not belong to the reservation owner.");
         if (order.Status != OrderStatus.Created || (order.Dishes ?? []).Any(d => d.State != OrderItemState.Pending))
             throw new GroupPreOrderConflictException("Only an unprocessed order can be consolidated.");
-        var includeOwner = owner != null && owner.IsSubmitted && order.OwnerGroupReady &&
+        var includeOwner = owner.IsSubmitted && order.OwnerGroupReady &&
             OrderingPreference.Effective(owner.OrderingPreference) == OrderingPreference.Online;
-        if (submitted.Any(s => s.IsOwnerSession) != includeOwner)
+        if (online.Any(s => s.IsOwnerSession) != includeOwner)
             throw new GroupPreOrderConflictException("Owner pre-order changed; reload the group.");
         if (owner?.Dishes is { Count: > 0 })
             throw new GroupPreOrderConflictException("Owner session contains a legacy cart; resolve it before finalizing.");
         var ownerDishes = includeOwner ? order.Dishes! : new List<OrderItem>();
+        if (includeOwner && ownerDishes.Count == 0)
+            throw new ValidationException("The owner's submitted pre-order is empty.");
+        if (includeOwner)
+        {
+            var ownerIds = ownerDishes.Select(d => d.DishId).Distinct().ToArray();
+            var ownerAvailable = (await dishes.GetDishesByIdsAsync(ownerIds)).ToDictionary(d => d.Id);
+            if (ownerIds.Any(id => !ownerAvailable.TryGetValue(id, out var dish) || dish.State != DishState.Available))
+                throw new ValidationException("A submitted dish is missing or unavailable.");
+        }
         if (ownerDishes.Concat(guestDishes).Any(d => string.IsNullOrWhiteSpace(d.DishId) || d.Quantity <= 0))
             throw new ValidationException("Submitted dishes must have a valid ID and positive quantity.");
         if (ownerDishes.Count + guestDishes.Count == 0)
@@ -165,7 +186,7 @@ public class GroupPreOrderService(
                 .Select(g => new OrderItem { DishId = g.Key, Quantity = g.Sum(d => d.Quantity), State = OrderItemState.Pending }).ToList();
         }
         catch (OverflowException) { throw new ValidationException("Consolidated quantity is too large."); }
-        await persistence.SubmitAsync(order, group, reservation, consolidated, submitted);
+        await persistence.SubmitAsync(order, group, reservation, consolidated, allSessions);
         return consolidated.Select(d => new ConsolidatedDish(d.DishId, d.Quantity)).ToArray();
     }
 

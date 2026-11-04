@@ -117,6 +117,7 @@ public class GroupReservationService(
             return;
 
         groupReservation.Status = GroupReservationStatus.Closed;
+        groupReservation.OnlinePreOrderClosed = false;
 
         await groupReservationRepository.SaveGroupReservationAsync(groupReservation);
     }

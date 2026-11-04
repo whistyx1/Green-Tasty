@@ -55,10 +55,55 @@ public class GuestSessionRepository(IDynamoDBContext context, IAmazonDynamoDB cl
             .Select(session => session!).ToList();
     }
 
-    public async Task CreateAsync(GuestSession guestSession) => await context.SaveAsync(guestSession, new SaveConfig
+    public async Task<List<GuestSession>> GetAllByGroupReservationIdConsistentAsync(string groupReservationId)
     {
-        OverrideTableName = ResourceNames.GuestSessionTableName
-    });
+        var result = new List<GuestSession>();
+        Dictionary<string, AttributeValue>? cursor = null;
+        do
+        {
+            var page = await client.ScanAsync(new ScanRequest
+            {
+                TableName = ResourceNames.GuestSessionTableName,
+                ConsistentRead = true,
+                FilterExpression = "groupReservationId = :group",
+                ProjectionExpression = "guestSessionId",
+                ExpressionAttributeValues = new() { [":group"] = new AttributeValue { S = groupReservationId } },
+                ExclusiveStartKey = cursor
+            });
+            foreach (var item in page.Items)
+            {
+                var session = await GetByGuestSessionId(item["guestSessionId"].S);
+                if (session?.GroupReservationId == groupReservationId) result.Add(session);
+            }
+            cursor = page.LastEvaluatedKey;
+        } while (cursor is { Count: > 0 });
+        return result;
+    }
+
+    public async Task CreateAsync(GuestSession guestSession)
+    {
+        var item = context.ToDocument(guestSession,
+            new ToDocumentConfig { OverrideTableName = ResourceNames.GuestSessionTableName }).ToAttributeMap();
+        try
+        {
+            await client.TransactWriteItemsAsync(new TransactWriteItemsRequest { TransactItems = new()
+            {
+                new() { Put = new Put { TableName = ResourceNames.GuestSessionTableName, Item = item,
+                    ConditionExpression = "attribute_not_exists(guestSessionId)" } },
+                new() { Update = new Update { TableName = ResourceNames.GroupReservationsTableName,
+                    Key = new() { ["groupReservationId"] = item["groupReservationId"] },
+                    UpdateExpression = "SET #revision = if_not_exists(#revision, :zero) + :one",
+                    ConditionExpression = "#status = :open",
+                    ExpressionAttributeNames = new() { ["#revision"] = "participantRevision", ["#status"] = "status" },
+                    ExpressionAttributeValues = new() { [":zero"] = new AttributeValue { N = "0" },
+                        [":one"] = new AttributeValue { N = "1" }, [":open"] = new AttributeValue { N = "0" } } } }
+            } });
+        }
+        catch (TransactionCanceledException ex) when (IsConflict(ex))
+        { throw new GroupPreOrderConflictException("The group changed; reload before joining."); }
+        catch (TransactionConflictException)
+        { throw new GroupPreOrderConflictException("The group is being changed; retry joining."); }
+    }
 
     public async Task SaveAsync(GuestSession guestSession)
     {

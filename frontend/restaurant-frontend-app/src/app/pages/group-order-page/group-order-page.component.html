@@ -77,7 +77,11 @@
       @if (status() === 'Submitted') {
         <p class="sent-message" role="status">Your pre-order has been sent to the restaurant.</p>
       } @else if (status() === 'Closed') {
-        <p class="screen-message" role="status">This group reservation is closed.</p>
+        <p class="screen-message" role="status">
+          {{ groupStatus()?.onlinePreOrderClosed
+            ? 'Online pre-order closed. Your table reservation remains active.'
+            : 'This group reservation is closed.' }}
+        </p>
       }
       @if (empty()) {
         <p class="screen-message">Participants haven't added any dishes yet</p>
@@ -107,6 +111,19 @@
           }
         </section>
       }
+      <section class="group-progress" aria-labelledby="group-progress-title">
+        <h2 id="group-progress-title">Group pre-order progress</h2>
+        <p class="progress-count" role="status">{{ submittedOnlineCount() }} of {{ onlineCount() }} Online participants submitted</p>
+        <ul aria-label="Participant ordering status">
+          @for (person of progressParticipants(); track person.id) {
+            <li>
+              <span>{{ person.name }}{{ person.type === 'Owner' ? ' (you)' : '' }}</span>
+              <span>{{ person.orderingPreference === 'InRestaurant' ? 'In Restaurant' :
+                isOnlineReady(person) ? 'Online Submitted' : 'Online Pending' }}</span>
+            </li>
+          }
+        </ul>
+      </section>
       <ul class="participants" aria-label="Preorder participants">
         @for (person of participants(); track person.id) {
           <li>
@@ -159,14 +176,22 @@
           <p class="submit-error" role="alert">{{ submitError() }}</p>
         }
         @if (status() === 'Open') {
-          <button
-            class="submit-button"
-            type="button"
-            [disabled]="!canSubmit()"
-            (click)="openConfirmation()"
-          >
-            Submit Pre-Order
-          </button>
+          @if (allInRestaurant()) {
+            <p class="screen-message" role="status">
+              No online pre-order is needed. Your table reservation remains active.
+            </p>
+            <button class="submit-button" type="button" [disabled]="!canCloseOnline()"
+              (click)="openCloseConfirmation()">Close Online Pre-Order</button>
+          } @else {
+            <button
+              class="submit-button"
+              type="button"
+              [disabled]="!canSubmit()"
+              (click)="openConfirmation()"
+            >
+              Submit Pre-Order
+            </button>
+          }
         }
       </footer>
     }
@@ -180,6 +205,18 @@
   <app-submission-confirmation kind="group" [items]="confirmationItems()" [busy]="submitting()"
     [pendingGuests]="pendingCount()"
     (closed)="closeConfirmation()" (confirmed)="submit()" />
+}
+@if (closeConfirmationOpen()) {
+  <app-modal title="Close Online Pre-Order" width="520px" [closeOnBackdrop]="!submitting()"
+    (closed)="dismissCloseConfirmation()" cdkTrapFocus [cdkTrapFocusAutoCapture]="true">
+    <p>Everyone chose In Restaurant. Close the online pre-order without sending an order? Your table reservation remains active.</p>
+    <div modal-actions class="confirmation-actions">
+      <button class="secondary-button" type="button" [disabled]="submitting()"
+        (click)="dismissCloseConfirmation()">Cancel</button>
+      <button class="submit-button" type="button" [disabled]="submitting() || !canCloseOnline()"
+        (click)="closeOnlinePreOrder()">{{ submitting() ? 'Closing…' : 'Confirm' }}</button>
+    </div>
+  </app-modal>
 }
 
 @if (removeTarget(); as target) {

@@ -9,5 +9,7 @@ public interface IGroupPreOrderRepository
         Order? order, string preference);
     Task SubmitOwnerAsync(GuestSession owner, GroupReservation group, Reservation reservation, Order order);
     Task SubmitAsync(Order order, GroupReservation group, Reservation reservation,
-        List<OrderItem> dishes, IReadOnlyList<GuestSession> submittedSessions);
+        List<OrderItem> dishes, IReadOnlyList<GuestSession> participants);
+    Task CloseWithoutOrderAsync(GroupReservation group, Reservation reservation,
+        IReadOnlyList<GuestSession> participants);
 }

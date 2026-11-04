@@ -50,7 +50,7 @@ public class GetGroupSessionsTests
             Session("andrii", "Andrii", true, new OrderItem { DishId = "salad", Quantity = 2 }),
             Session("olena", "Olena", false, new OrderItem { DishId = "soup", Quantity = 1 })
         };
-        _sessions.Setup(repository => repository.GetAllByGroupReservationIdAsync(GroupId)).ReturnsAsync(sessions);
+        _sessions.Setup(repository => repository.GetAllByGroupReservationIdConsistentAsync(GroupId)).ReturnsAsync(sessions);
         _dishes.Setup(repository => repository.GetDishesByIdsAsync(It.IsAny<IEnumerable<string>>()))
             .ReturnsAsync([Dish("salad", "Salad", 180.25m), Dish("soup", "Soup", 220.10m)]);
 
@@ -82,7 +82,7 @@ public class GetGroupSessionsTests
         var ownerSession = Session("owner-session", "Owner", false);
         ownerSession.IsOwnerSession = true;
         ownerSession.OwnerUserId = OwnerId;
-        _sessions.Setup(repository => repository.GetAllByGroupReservationIdAsync(GroupId)).ReturnsAsync([ownerSession]);
+        _sessions.Setup(repository => repository.GetAllByGroupReservationIdConsistentAsync(GroupId)).ReturnsAsync([ownerSession]);
         _users.Setup(repository => repository.GetUserByIdAsync(OwnerId))
             .ReturnsAsync(new UserType { Attributes = [new AttributeType { Name = "given_name", Value = "Yevhenii" }] });
 
@@ -102,7 +102,7 @@ public class GetGroupSessionsTests
     {
         var ownerSession = Session("owner-session", "Stored owner", false);
         ownerSession.IsOwnerSession = true;
-        _sessions.Setup(repository => repository.GetAllByGroupReservationIdAsync(GroupId)).ReturnsAsync([ownerSession]);
+        _sessions.Setup(repository => repository.GetAllByGroupReservationIdConsistentAsync(GroupId)).ReturnsAsync([ownerSession]);
         _users.Setup(repository => repository.GetUserByIdAsync(OwnerId)).ReturnsAsync((UserType?)null);
 
         var result = await _service.GetAllSessionsAsync(OwnerId, GroupId);
@@ -113,7 +113,7 @@ public class GetGroupSessionsTests
     [Fact]
     public async Task GetAllSessionsAsync_EmptyGroupReturnsEmptySnapshotWithoutInventingOwnerSession()
     {
-        _sessions.Setup(repository => repository.GetAllByGroupReservationIdAsync(GroupId)).ReturnsAsync([]);
+        _sessions.Setup(repository => repository.GetAllByGroupReservationIdConsistentAsync(GroupId)).ReturnsAsync([]);
 
         var result = await _service.GetAllSessionsAsync(OwnerId, GroupId);
 
@@ -129,7 +129,7 @@ public class GetGroupSessionsTests
     {
         var session = Session("guest-1", "Guest", false);
         session.Dishes = null!; // A legacy DynamoDB record may omit the collection.
-        _sessions.Setup(repository => repository.GetAllByGroupReservationIdAsync(GroupId)).ReturnsAsync([session]);
+        _sessions.Setup(repository => repository.GetAllByGroupReservationIdConsistentAsync(GroupId)).ReturnsAsync([session]);
 
         var result = await _service.GetAllSessionsAsync(OwnerId, GroupId);
 
@@ -140,7 +140,7 @@ public class GetGroupSessionsTests
     [Fact]
     public async Task GetAllSessionsAsync_SharedDishIsFetchedOnceAndPricedPerParticipant()
     {
-        _sessions.Setup(repository => repository.GetAllByGroupReservationIdAsync(GroupId))
+        _sessions.Setup(repository => repository.GetAllByGroupReservationIdConsistentAsync(GroupId))
             .ReturnsAsync([
                 Session("one", "One", true, new OrderItem { DishId = "salad", Quantity = 2 }),
                 Session("two", "Two", false, new OrderItem { DishId = "salad", Quantity = 3 })
@@ -160,7 +160,7 @@ public class GetGroupSessionsTests
     {
         await Assert.ThrowsAsync<ActionForbiddenException>(() => _service.GetAllSessionsAsync("another-user", GroupId));
 
-        _sessions.Verify(repository => repository.GetAllByGroupReservationIdAsync(It.IsAny<string>()), Times.Never);
+        _sessions.Verify(repository => repository.GetAllByGroupReservationIdConsistentAsync(It.IsAny<string>()), Times.Never);
         _dishes.Verify(repository => repository.GetDishesByIdsAsync(It.IsAny<IEnumerable<string>>()), Times.Never);
         _users.Verify(repository => repository.GetUserByIdAsync(It.IsAny<string>()), Times.Never);
     }
@@ -173,7 +173,7 @@ public class GetGroupSessionsTests
         await Assert.ThrowsAsync<GroupReservationNotFoundException>(() => _service.GetAllSessionsAsync(OwnerId, GroupId));
 
         _reservations.Verify(repository => repository.GetReservationByIdAsync(It.IsAny<string>()), Times.Never);
-        _sessions.Verify(repository => repository.GetAllByGroupReservationIdAsync(It.IsAny<string>()), Times.Never);
+        _sessions.Verify(repository => repository.GetAllByGroupReservationIdConsistentAsync(It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
@@ -183,13 +183,13 @@ public class GetGroupSessionsTests
 
         await Assert.ThrowsAsync<ReservationNotFoundException>(() => _service.GetAllSessionsAsync(OwnerId, GroupId));
 
-        _sessions.Verify(repository => repository.GetAllByGroupReservationIdAsync(It.IsAny<string>()), Times.Never);
+        _sessions.Verify(repository => repository.GetAllByGroupReservationIdConsistentAsync(It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
     public async Task GetAllSessionsAsync_MissingReferencedDishFailsInsteadOfReturningIncorrectTotal()
     {
-        _sessions.Setup(repository => repository.GetAllByGroupReservationIdAsync(GroupId))
+        _sessions.Setup(repository => repository.GetAllByGroupReservationIdConsistentAsync(GroupId))
             .ReturnsAsync([Session("guest", "Guest", true, new OrderItem { DishId = "removed-dish", Quantity = 2 })]);
         _dishes.Setup(repository => repository.GetDishesByIdsAsync(It.IsAny<IEnumerable<string>>())).ReturnsAsync([]);
 

@@ -5,4 +5,5 @@ export interface GroupStatusResponse {
   currentParticipants: number;
   maxCapacity: number;
   status: GroupReservationStatus;
+  onlinePreOrderClosed?: boolean;
 }

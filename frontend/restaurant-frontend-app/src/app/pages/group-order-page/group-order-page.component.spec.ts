@@ -91,8 +91,8 @@ describe('Рівень 2 · сторінка Owner Review', () => {
       expect(create().element.textContent).toContain('Caesar Salad × 3');
     });
 
-    it('жовта плашка: «1 participant hasn’t submitted…»', () => {
-      expect(create().element.textContent).toMatch(/1 participant hasn.t submitted/);
+    it('жовта плашка: Online participant must submit before finalization', () => {
+      expect(create().element.textContent).toContain('1 Online participant must submit a nonempty pre-order before finalization.');
     });
   });
 
@@ -120,6 +120,11 @@ describe('Рівень 2 · сторінка Owner Review', () => {
   });
 
   describe('Submit Pre-Order', () => {
+    beforeEach(() => {
+      const ready = structuredClone(SESSIONS);
+      ready.participants[2].orderingPreference = 'InRestaurant';
+      service.getSessions$.and.returnValue(of(ready));
+    });
     it('confirmation lists only included dishes and their consolidated total', () => {
       const { fixture, element } = create();
       buttonByText(element, 'Submit Pre-Order')?.click();

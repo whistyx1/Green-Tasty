@@ -17,4 +17,10 @@ public class GroupReservation
 
     [DynamoDBProperty("status")]
     public GroupReservationStatus Status { get; set; }
+
+    [DynamoDBProperty("participantRevision")]
+    public long ParticipantRevision { get; set; }
+
+    [DynamoDBProperty("onlinePreOrderClosed")]
+    public bool OnlinePreOrderClosed { get; set; }
 }

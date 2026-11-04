@@ -24,5 +24,9 @@ public class CreateGuestSessionHandler(IGuestSessionService guestSessionService)
         {
             return ResponseBuilder.CreateErrorCodeResponse(exception);
         }
+        catch (GroupPreOrderConflictException exception)
+        {
+            return ResponseBuilder.CreateErrorResponse(409, exception.Message, context.Logger);
+        }
     }
 }

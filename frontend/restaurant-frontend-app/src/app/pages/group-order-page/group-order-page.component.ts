@@ -86,11 +86,16 @@ export class GroupOrderPageComponent implements OnInit {
     );
   });
   readonly ownerSessionId = signal('');
+  readonly allInRestaurant = computed(() =>
+    !!this.owner() &&
+    this.rawParticipants().every(person => person.orderingPreference === 'InRestaurant')
+  );
   readonly groupStatus = signal<GroupStatusResponse | null>(null);
   readonly loading = signal(true);
   readonly loadError = signal('');
   readonly submitting = signal(false);
   readonly confirmationOpen = signal(false);
+  readonly closeConfirmationOpen = signal(false);
   readonly submitError = signal('');
   readonly refreshing = signal(false);
   readonly updatedAt = signal<Date | null>(null);
@@ -145,13 +150,29 @@ export class GroupOrderPageComponent implements OnInit {
   readonly pendingCount = computed(
     () =>
       this.rawParticipants().filter(person =>
-        person.orderingPreference !== 'InRestaurant' && !person.isSubmitted).length
+        person.orderingPreference !== 'InRestaurant' && !this.isOnlineReady(person)).length
   );
+  readonly onlineCount = computed(() => this.rawParticipants().filter(person =>
+    person.orderingPreference !== 'InRestaurant').length);
+  readonly submittedOnlineCount = computed(() => this.rawParticipants().filter(person =>
+    person.orderingPreference !== 'InRestaurant' && this.isOnlineReady(person)).length);
+  isOnlineReady(person: Participant): boolean {
+    return person.isSubmitted && (person.type === 'Owner'
+      ? !!this.ownerPreOrder()?.items.length || this.status() === 'Submitted'
+      : person.items.length > 0);
+  }
+  readonly progressParticipants = computed(() => {
+    const owner = this.owner();
+    return [
+      ...(owner ? [owner] : []),
+      ...this.rawParticipants().filter(person => person.type === 'Guest'),
+    ];
+  });
   readonly pendingMessage = computed(() => {
     const count = this.pendingCount();
     return count === 1
-      ? "1 participant hasn't submitted their cart yet — their dishes won't be included in the order"
-      : `${count} participants haven't submitted their cart yet — their dishes won't be included in the order`;
+      ? '1 Online participant must submit a nonempty pre-order before finalization.'
+      : `${count} Online participants must submit nonempty pre-orders before finalization.`;
   });
   readonly empty = computed(
     () =>
@@ -166,9 +187,16 @@ export class GroupOrderPageComponent implements OnInit {
       !this.submitting() &&
       !this.removing() &&
       this.status() === 'Open' &&
+      this.owner() != null &&
+      this.pendingCount() === 0 &&
+      this.onlineCount() > 0 &&
+      this.rawParticipants().every(person => person.orderingPreference === 'InRestaurant' || this.isOnlineReady(person)) &&
       this.consolidated().items.length > 0 &&
       this.ownerPreOrder()?.editable !== false
   );
+  readonly canCloseOnline = computed(() =>
+    !this.loading() && !this.loadError() && !this.submitting() && !this.removing() &&
+    this.status() === 'Open' && this.allInRestaurant());
 
   ngOnInit(): void {
     // Actual routes emit on parameter changes; snapshot-only contexts are useful
@@ -208,6 +236,7 @@ export class GroupOrderPageComponent implements OnInit {
     this.cancelRefresh();
     this.loadSubscription?.unsubscribe();
     this.confirmationOpen.set(false);
+    this.closeConfirmationOpen.set(false);
     this.loadError.set('');
     this.submitError.set('');
     this.removeError.set('');
@@ -383,6 +412,7 @@ export class GroupOrderPageComponent implements OnInit {
           if (status.status !== 'Open') {
             this.stopPolling();
             this.confirmationOpen.set(false);
+            this.closeConfirmationOpen.set(false);
             this.removeTarget.set(null);
           }
         },
@@ -463,6 +493,49 @@ export class GroupOrderPageComponent implements OnInit {
 
   closeConfirmation(): void {
     if (!this.submitting()) this.confirmationOpen.set(false);
+  }
+
+  openCloseConfirmation(): void {
+    if (!this.canCloseOnline() || this.removeTarget()) return;
+    this.submitError.set('');
+    this.closeConfirmationOpen.set(true);
+  }
+
+  dismissCloseConfirmation(): void {
+    if (!this.submitting()) this.closeConfirmationOpen.set(false);
+  }
+
+  closeOnlinePreOrder(): void {
+    const invite = this.invite();
+    if (!invite || !this.closeConfirmationOpen() || !this.canCloseOnline()) return;
+    this.submitting.set(true);
+    this.stopPolling();
+    this.cancelRefresh();
+    this.submitError.set('');
+    this.mutationSubscription = this.service.submit$(invite.GroupReservationId, this.reservationId)
+      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.submitting.set(false)))
+      .subscribe({
+        next: (response) => {
+          this.closeConfirmationOpen.set(false);
+          if (response.length !== 0) {
+            this.applySubmittedResponse(response);
+            const status = this.groupStatus();
+            if (status) this.groupStatus.set({ ...status, status: 'Submitted' });
+            this.toast.success('Pre-order sent to the restaurant');
+            return;
+          }
+          const status = this.groupStatus();
+          if (status) this.groupStatus.set({ ...status, status: 'Closed', onlinePreOrderClosed: true });
+          this.toast.success('Online pre-order closed; your reservation remains active');
+        },
+        error: (error: unknown) => {
+          this.submitError.set(error instanceof HttpErrorResponse
+            ? getServerErrorMessage(error) || "Couldn't close the online pre-order. Please try again."
+            : "Couldn't close the online pre-order. Please try again.");
+          this.closeConfirmationOpen.set(false);
+          this.startPolling();
+        },
+      });
   }
 
   submit(): void {

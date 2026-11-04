@@ -111,14 +111,22 @@ public class GroupPreOrderRepository(IAmazonDynamoDB client, IDynamoDBContext co
             GuestName = "Owner", Dishes = [], IsOwnerSession = true, OwnerUserId = userId };
         try
         {
-            await client.PutItemAsync(new PutItemRequest {
-                TableName = ResourceNames.GuestSessionTableName,
-                Item = context.ToDocument(session, new ToDocumentConfig { OverrideTableName = ResourceNames.GuestSessionTableName }).ToAttributeMap(),
-                ConditionExpression = "attribute_not_exists(guestSessionId)"
-            });
+            await client.TransactWriteItemsAsync(new TransactWriteItemsRequest { TransactItems = new()
+            {
+                new() { Put = new Put { TableName = ResourceNames.GuestSessionTableName,
+                    Item = context.ToDocument(session, new ToDocumentConfig { OverrideTableName = ResourceNames.GuestSessionTableName }).ToAttributeMap(),
+                    ConditionExpression = "attribute_not_exists(guestSessionId)" } },
+                new() { Update = new Update { TableName = ResourceNames.GroupReservationsTableName,
+                    Key = new() { ["groupReservationId"] = new AttributeValue { S = groupReservationId } },
+                    UpdateExpression = "SET #revision = if_not_exists(#revision, :zero) + :one",
+                    ConditionExpression = "#status = :open",
+                    ExpressionAttributeNames = new() { ["#revision"] = "participantRevision", ["#status"] = "status" },
+                    ExpressionAttributeValues = new() { [":zero"] = new AttributeValue { N = "0" },
+                        [":one"] = new AttributeValue { N = "1" }, [":open"] = new AttributeValue { N = "0" } } } }
+            } });
             return session;
         }
-        catch (ConditionalCheckFailedException)
+        catch (TransactionCanceledException ex) when (ex.CancellationReasons?.FirstOrDefault()?.Code == "ConditionalCheckFailed")
         {
             var existing = await context.LoadAsync<GuestSession>(session.Id, new LoadConfig {
                 OverrideTableName = ResourceNames.GuestSessionTableName, ConsistentRead = true });
@@ -126,10 +134,14 @@ public class GroupPreOrderRepository(IAmazonDynamoDB client, IDynamoDBContext co
                 throw new GroupPreOrderConflictException("The owner session changed; reload the group.");
             return existing;
         }
+        catch (TransactionCanceledException ex) when (ex.CancellationReasons?.Any(r => r.Code is "ConditionalCheckFailed" or "TransactionConflict") == true)
+        { throw new GroupPreOrderConflictException("The group changed; reload before continuing."); }
+        catch (TransactionConflictException)
+        { throw new GroupPreOrderConflictException("The group is being changed; reload before continuing."); }
     }
 
     public async Task SubmitAsync(Order order, GroupReservation group, Reservation reservation,
-        List<OrderItem> dishes, IReadOnlyList<GuestSession> submittedSessions)
+        List<OrderItem> dishes, IReadOnlyList<GuestSession> participants)
     {
         var originalOrder = context.ToDocument(order, new ToDocumentConfig { OverrideTableName = ResourceNames.OrdersTableName }).ToAttributeMap();
         var originalGroup = context.ToDocument(group, new ToDocumentConfig { OverrideTableName = ResourceNames.GroupReservationsTableName }).ToAttributeMap();
@@ -158,9 +170,11 @@ public class GroupPreOrderRepository(IAmazonDynamoDB client, IDynamoDBContext co
                 TableName = ResourceNames.GroupReservationsTableName,
                 Key = new() { ["groupReservationId"] = originalGroup["groupReservationId"] },
                 UpdateExpression = "SET #s = :newStatus",
-                ConditionExpression = "#s = :oldStatus AND reservationId = :reservation",
-                ExpressionAttributeNames = new() { ["#s"] = "status" },
-                ExpressionAttributeValues = new() { [":oldStatus"] = originalGroup["status"], [":newStatus"] = newGroup["status"], [":reservation"] = originalGroup["reservationId"] }
+                ConditionExpression = "#s = :oldStatus AND reservationId = :reservation AND " + GroupRevisionCondition(group.ParticipantRevision),
+                ExpressionAttributeNames = new() { ["#s"] = "status", ["#revision"] = "participantRevision" },
+                ExpressionAttributeValues = new() { [":oldStatus"] = originalGroup["status"], [":newStatus"] = newGroup["status"],
+                    [":reservation"] = originalGroup["reservationId"],
+                    [":expectedRevision"] = new AttributeValue { N = group.ParticipantRevision.ToString(System.Globalization.CultureInfo.InvariantCulture) } }
             } },
             new() { ConditionCheck = new ConditionCheck {
                 TableName = ResourceNames.ReservationsTableName, Key = new() { ["id"] = originalReservation["id"] },
@@ -169,23 +183,71 @@ public class GroupPreOrderRepository(IAmazonDynamoDB client, IDynamoDBContext co
                 ExpressionAttributeValues = new() { [":status"] = originalReservation["status"], [":owner"] = originalReservation["customerId"], [":startTime"] = originalReservation["startTime"] }
             } }
         };
-        foreach (var session in submittedSessions)
+        writes.AddRange(ParticipantChecks(participants));
+        await WriteFinalizationAsync(writes);
+    }
+
+    public async Task CloseWithoutOrderAsync(GroupReservation group, Reservation reservation,
+        IReadOnlyList<GuestSession> participants)
+    {
+        var reservationItem = context.ToDocument(reservation,
+            new ToDocumentConfig { OverrideTableName = ResourceNames.ReservationsTableName }).ToAttributeMap();
+        var writes = new List<TransactWriteItem> {
+            new() { Update = new Update { TableName = ResourceNames.GroupReservationsTableName,
+                Key = new() { ["groupReservationId"] = new AttributeValue { S = group.GroupReservationId } },
+                UpdateExpression = "SET #status = :closed, onlinePreOrderClosed = :true",
+                ConditionExpression = "#status = :open AND reservationId = :reservation AND " + GroupRevisionCondition(group.ParticipantRevision),
+                ExpressionAttributeNames = new() { ["#status"] = "status", ["#revision"] = "participantRevision" },
+                ExpressionAttributeValues = new() { [":open"] = new AttributeValue { N = "0" },
+                    [":closed"] = new AttributeValue { N = ((int)GroupReservationStatus.Closed).ToString() },
+                    [":true"] = new AttributeValue { N = "1" }, [":reservation"] = new AttributeValue { S = reservation.Id },
+                    [":expectedRevision"] = new AttributeValue { N = group.ParticipantRevision.ToString(System.Globalization.CultureInfo.InvariantCulture) } } } },
+            new() { ConditionCheck = new ConditionCheck { TableName = ResourceNames.ReservationsTableName,
+                Key = new() { ["id"] = reservationItem["id"] },
+                ConditionExpression = "#status = :reserved AND customerId = :owner AND startTime = :start",
+                ExpressionAttributeNames = new() { ["#status"] = "status" },
+                ExpressionAttributeValues = new() { [":reserved"] = reservationItem["status"],
+                    [":owner"] = reservationItem["customerId"], [":start"] = reservationItem["startTime"] } } }
+        };
+        writes.AddRange(ParticipantChecks(participants));
+        await WriteFinalizationAsync(writes);
+    }
+
+    private IEnumerable<TransactWriteItem> ParticipantChecks(IReadOnlyList<GuestSession> participants)
+    {
+        foreach (var session in participants)
         {
-            var snapshot = context.ToDocument(session, new ToDocumentConfig { OverrideTableName = ResourceNames.GuestSessionTableName }).ToAttributeMap();
-            writes.Add(new TransactWriteItem { ConditionCheck = new ConditionCheck {
-                TableName = ResourceNames.GuestSessionTableName, Key = new() { ["guestSessionId"] = snapshot["guestSessionId"] },
-                ConditionExpression = "isSubmitted = :submitted AND groupReservationId = :group AND dishes = :dishes AND " +
-                    "(attribute_not_exists(orderingPreference) OR orderingPreference = :online) AND " +
+            var snapshot = context.ToDocument(session,
+                new ToDocumentConfig { OverrideTableName = ResourceNames.GuestSessionTableName }).ToAttributeMap();
+            var online = OrderingPreference.Effective(session.OrderingPreference) == OrderingPreference.Online;
+            var hasDishes = snapshot.TryGetValue("dishes", out var savedDishes);
+            var values = new Dictionary<string, AttributeValue> {
+                [":submitted"] = snapshot["isSubmitted"], [":group"] = snapshot["groupReservationId"],
+                [":preference"] = new AttributeValue { S = online ? OrderingPreference.Online : OrderingPreference.InRestaurant },
+                [":revision"] = new AttributeValue { N = session.Revision.ToString(System.Globalization.CultureInfo.InvariantCulture) }
+            };
+            if (hasDishes) values[":dishes"] = savedDishes!;
+            yield return new TransactWriteItem { ConditionCheck = new ConditionCheck {
+                TableName = ResourceNames.GuestSessionTableName,
+                Key = new() { ["guestSessionId"] = snapshot["guestSessionId"] },
+                ConditionExpression = "isSubmitted = :submitted AND groupReservationId = :group AND " +
+                    (hasDishes ? "dishes = :dishes" : "attribute_not_exists(dishes)") + " AND " +
+                    (online ? "(attribute_not_exists(orderingPreference) OR orderingPreference = :preference)" : "orderingPreference = :preference") + " AND " +
                     (session.Revision == 0 ? "(attribute_not_exists(revision) OR revision = :revision)" : "revision = :revision"),
-                ExpressionAttributeValues = new() { [":submitted"] = snapshot["isSubmitted"], [":group"] = snapshot["groupReservationId"],
-                    [":dishes"] = snapshot["dishes"], [":online"] = new AttributeValue { S = OrderingPreference.Online },
-                    [":revision"] = new AttributeValue { N = session.Revision.ToString(System.Globalization.CultureInfo.InvariantCulture) } }
-            } });
+                ExpressionAttributeValues = values
+            } };
         }
+    }
+
+    private static string GroupRevisionCondition(long revision) => revision == 0
+        ? "(attribute_not_exists(#revision) OR #revision = :expectedRevision)" : "#revision = :expectedRevision";
+
+    private async Task WriteFinalizationAsync(List<TransactWriteItem> writes)
+    {
         try { await client.TransactWriteItemsAsync(new TransactWriteItemsRequest { TransactItems = writes }); }
-        catch (TransactionCanceledException ex) when (ex.CancellationReasons?.Any(r => r.Code == "ConditionalCheckFailed" || r.Code == "TransactionConflict") == true)
-        { throw new GroupPreOrderConflictException("The group order changed; reload before submitting again."); }
+        catch (TransactionCanceledException ex) when (ex.CancellationReasons?.Any(r => r.Code is "ConditionalCheckFailed" or "TransactionConflict") == true)
+        { throw new GroupPreOrderConflictException("The group changed; reload before finalizing again."); }
         catch (TransactionConflictException)
-        { throw new GroupPreOrderConflictException("The group order is being changed; reload before submitting again."); }
+        { throw new GroupPreOrderConflictException("The group is being changed; reload before finalizing again."); }
     }
 }

@@ -24,7 +24,8 @@ public class GroupPreOrderServiceTests
     private readonly Mock<IGroupPreOrderRepository> _persistence = new();
     private readonly Mock<ILocationService> _locations = new();
     private readonly GroupPreOrderService _service;
-    private readonly Reservation _reservation = new() { Id = "reservation", TableId = "table", WaiterId = "waiter", CustomerId = "owner", StartTime = DateTime.UtcNow.AddHours(2) };
+    private readonly Reservation _reservation = new() { Id = "reservation", TableId = "table", WaiterId = "waiter", CustomerId = "owner",
+        StartTime = DateTime.UtcNow.AddHours(2), EndTime = DateTime.UtcNow.AddHours(3) };
     private readonly GroupReservation _group = new() { GroupReservationId = "group", ReservationId = "reservation", ReservationToken = "token" };
     private readonly Order _order = new() { OrderId = "order", CustomerId = "owner", ReservationId = "reservation", ReservationAddress = "address", ReservationTime = "time", Dishes = [Item("salad", 2)] };
     private readonly List<GuestSession> _participants = [Session("guest", true, Item("salad", 3), Item("soup", 1)), Session("draft", false, Item("soup", 100))];
@@ -36,6 +37,8 @@ public class GroupPreOrderServiceTests
         _groups.Setup(r => r.GetGroupReservationByIdAsync("group")).ReturnsAsync(_group);
         _groups.Setup(r => r.GetByReservationIdAsync("reservation")).ReturnsAsync(_group);
         _sessions.Setup(r => r.GetAllByGroupReservationIdAsync("group")).ReturnsAsync(_participants);
+        _sessions.Setup(r => r.GetAllByGroupReservationIdConsistentAsync("group")).ReturnsAsync(_participants);
+        _participants[1].OrderingPreference = APIHandler.Models.GuestSessions.OrderingPreference.InRestaurant;
         _orders.Setup(r => r.GetOrderByReservationIdAsync("reservation")).ReturnsAsync(_order);
         _dishes.Setup(r => r.GetDishesByIdsAsync(It.IsAny<IEnumerable<string>>())).ReturnsAsync([Dish("salad"), Dish("soup")]);
         _persistence.Setup(r => r.EnsureOwnerSessionAsync("group", "owner")).ReturnsAsync(Session("owner-group", false));
@@ -53,7 +56,7 @@ public class GroupPreOrderServiceTests
         var result = await _service.SubmitAsync("owner", "group", "reservation");
         Assert.Equal([new ConsolidatedDish("salad", 5), new ConsolidatedDish("soup", 1)], result);
         Assert.Equal(2, saved!.Count);
-        Assert.Equal(["guest", "owner-group"], submitted!.Select(session => session.Id));
+        Assert.Equal(["guest", "draft", "owner-group"], submitted!.Select(session => session.Id));
         Assert.All(saved, item => Assert.Equal(APIHandler.Constants.Orders.OrderItemState.Pending, item.State));
         Assert.Equal(2, Assert.Single(_order.Dishes).Quantity);
         Assert.Equal(OrderStatus.Created, _order.Status);
@@ -69,6 +72,119 @@ public class GroupPreOrderServiceTests
     }
 
     [Fact]
+    public async Task Submit_OnlinePendingGuestBlocksFinalization()
+    {
+        var owner = Session("owner-group", false);
+        owner.IsOwnerSession = true;
+        owner.OwnerUserId = "owner";
+        owner.OrderingPreference = APIHandler.Models.GuestSessions.OrderingPreference.InRestaurant;
+        _participants.Add(owner);
+        _participants[1].OrderingPreference = APIHandler.Models.GuestSessions.OrderingPreference.Online;
+
+        await Assert.ThrowsAsync<GroupPreOrderConflictException>(() =>
+            _service.SubmitAsync("owner", "group", "reservation"));
+
+        _persistence.VerifyNoOtherCalls();
+        _orders.Verify(r => r.SaveOrderAsync(It.IsAny<Order>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Submit_LegacyMissingPreferenceCountsAsOnlinePending()
+    {
+        var owner = Session("owner-group", false);
+        owner.IsOwnerSession = true;
+        owner.OwnerUserId = "owner";
+        owner.OrderingPreference = APIHandler.Models.GuestSessions.OrderingPreference.InRestaurant;
+        _participants.Add(owner);
+        _participants[1].OrderingPreference = null;
+
+        await Assert.ThrowsAsync<GroupPreOrderConflictException>(() =>
+            _service.SubmitAsync("owner", "group", "reservation"));
+        _persistence.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Submit_SubmittedOnlineGuestWithEmptyCartFails()
+    {
+        var owner = Session("owner-group", false);
+        owner.IsOwnerSession = true;
+        owner.OwnerUserId = "owner";
+        owner.OrderingPreference = APIHandler.Models.GuestSessions.OrderingPreference.InRestaurant;
+        _participants.Add(owner);
+        _participants[0].Dishes.Clear();
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.SubmitAsync("owner", "group", "reservation"));
+        _persistence.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Submit_AllInRestaurantClosesWithoutCreatingAnOrder()
+    {
+        var owner = Session("owner-group", false);
+        owner.IsOwnerSession = true;
+        owner.OwnerUserId = "owner";
+        owner.OrderingPreference = APIHandler.Models.GuestSessions.OrderingPreference.InRestaurant;
+        _participants.Add(owner);
+        _participants[0].OrderingPreference = APIHandler.Models.GuestSessions.OrderingPreference.InRestaurant;
+        _orders.Setup(r => r.GetOrderByReservationIdAsync("reservation")).ReturnsAsync((Order?)null);
+
+        var result = await _service.SubmitAsync("owner", "group", "reservation");
+
+        Assert.Empty(result);
+        _persistence.Verify(r => r.CloseWithoutOrderAsync(_group, _reservation,
+            It.Is<IReadOnlyList<GuestSession>>(people => people.Count == 3)), Times.Once);
+        _persistence.Verify(r => r.SubmitAsync(It.IsAny<Order>(), It.IsAny<GroupReservation>(),
+            It.IsAny<Reservation>(), It.IsAny<List<OrderItem>>(), It.IsAny<IReadOnlyList<GuestSession>>()), Times.Never);
+        _orders.Verify(r => r.SaveOrderAsync(It.IsAny<Order>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Submit_AllInRestaurantPreservesTheOwnersExistingDraft()
+    {
+        var owner = Session("owner-group", false);
+        owner.IsOwnerSession = true;
+        owner.OwnerUserId = "owner";
+        owner.OrderingPreference = APIHandler.Models.GuestSessions.OrderingPreference.InRestaurant;
+        _participants.Add(owner);
+        _participants[0].OrderingPreference = APIHandler.Models.GuestSessions.OrderingPreference.InRestaurant;
+
+        var result = await _service.SubmitAsync("owner", "group", "reservation");
+
+        Assert.Empty(result);
+        Assert.Equal(OrderStatus.Created, _order.Status);
+        Assert.Equal(2, Assert.Single(_order.Dishes).Quantity);
+        _orders.Verify(r => r.SaveOrderAsync(It.IsAny<Order>()), Times.Never);
+        _persistence.Verify(r => r.CloseWithoutOrderAsync(_group, _reservation,
+            It.IsAny<IReadOnlyList<GuestSession>>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Submit_AllInRestaurantCannotClaimAnExpiredReservationIsActive()
+    {
+        var owner = Session("owner-group", false);
+        owner.IsOwnerSession = true;
+        owner.OwnerUserId = "owner";
+        owner.OrderingPreference = APIHandler.Models.GuestSessions.OrderingPreference.InRestaurant;
+        _participants.Add(owner);
+        _participants[0].OrderingPreference = APIHandler.Models.GuestSessions.OrderingPreference.InRestaurant;
+        _reservation.EndTime = DateTime.UtcNow.AddMinutes(-1);
+
+        await Assert.ThrowsAsync<GroupPreOrderConflictException>(() =>
+            _service.SubmitAsync("owner", "group", "reservation"));
+        _persistence.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Submit_ClosedAllInRestaurantGroupCannotCloseAgain()
+    {
+        _group.Status = GroupReservationStatus.Closed;
+        await Assert.ThrowsAsync<GroupPreOrderConflictException>(() =>
+            _service.SubmitAsync("owner", "group", "reservation"));
+        _persistence.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task Submit_ExcludesInRestaurantOwnerDraftAndIncludesOnlineGuestOnce()
     {
         var owner = Session("owner-group", false);
@@ -81,7 +197,8 @@ public class GroupPreOrderServiceTests
 
         Assert.Equal([new ConsolidatedDish("salad", 3), new ConsolidatedDish("soup", 1)], result);
         _persistence.Verify(p => p.SubmitAsync(_order, _group, _reservation, It.IsAny<List<OrderItem>>(),
-            It.Is<IReadOnlyList<GuestSession>>(sessions => sessions.Count == 1 && sessions[0].Id == "guest")), Times.Once);
+            It.Is<IReadOnlyList<GuestSession>>(sessions => sessions.Count == 3 && sessions.Any(s => s.Id == "guest") &&
+                sessions.Any(s => s.Id == "draft") && sessions.Any(s => s.Id == "owner-group"))), Times.Once);
         Assert.Equal(2, _order.Dishes[0].Quantity);
     }
 
@@ -162,7 +279,6 @@ public class GroupPreOrderServiceTests
     }
 
     [Theory]
-    [InlineData("noSessions")]
     [InlineData("noDishes")]
     [InlineData("nullOrderDishes")]
     [InlineData("nullSessionDishes")]
@@ -177,7 +293,6 @@ public class GroupPreOrderServiceTests
         if (scenario == "nullOrderDishes") _order.Dishes = null!;
         if (scenario == "nullSessionDishes") _participants[0].Dishes = null!;
         if (scenario == "invalidOwnerQuantity") _order.Dishes[0].Quantity = -1;
-        if (scenario == "noSessions") _participants.Clear();
         if (scenario == "noDishes") { _participants[0].Dishes.Clear(); _order.Dishes.Clear(); }
         if (scenario == "zeroQuantity") _participants[0].Dishes[0].Quantity = 0;
         if (scenario == "missingDish") _dishes.Setup(r => r.GetDishesByIdsAsync(It.IsAny<IEnumerable<string>>())).ReturnsAsync([]);
@@ -321,6 +436,11 @@ public class GroupPreOrderServiceTests
     {
         var now = new DateTimeOffset(2030, 1, 1, 12, 0, 0, TimeSpan.Zero);
         _reservation.StartTime = now.UtcDateTime.AddMinutes(30 - minutesAfterCutoff);
+        var owner = Session("owner-group", false);
+        owner.IsOwnerSession = true;
+        owner.OwnerUserId = "owner";
+        owner.OrderingPreference = APIHandler.Models.GuestSessions.OrderingPreference.InRestaurant;
+        _participants.Add(owner);
         var service = new GroupPreOrderService(_reservations.Object, _groups.Object, _sessions.Object, _orders.Object, _dishes.Object, _persistence.Object, _locations.Object, new FixedClock(now));
         if (minutesAfterCutoff < 0) await service.SubmitAsync("owner", "group", "reservation");
         else

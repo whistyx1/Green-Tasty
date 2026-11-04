@@ -22,7 +22,7 @@ const data: GroupSessionsResponse = {
       id: 'guest',
       type: 'Guest',
       name: 'Guest',
-      isSubmitted: false,
+      isSubmitted: true,
       items: [{ dish, quantity: 1 }],
       total: 8,
     },
