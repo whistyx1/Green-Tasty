@@ -55,6 +55,7 @@ export class CardReservationComponent implements OnInit {
   readonly r = input.required<ReservationCustomer>();
   readonly role = input<string>(Roles.CUSTOMER);
   readonly ownerUserId = input('');
+  readonly submitLoading = input(false);
   private readonly now = signal(Date.now());
   readonly copyingInvite = signal(false);
   readonly showInviteAction = computed(() =>
@@ -74,10 +75,31 @@ export class CardReservationComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    if (this.showInviteAction()) {
+    if (this.role() === Roles.CUSTOMER) {
       interval(60_000).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(() => this.now.set(Date.now()));
     }
+  }
+
+  readonly showSingleSubmit = computed(() => {
+    const reservation = this.r();
+    const cutoff = new Date(reservation.startTime).getTime() - 30 * 60_000;
+    return this.role() === Roles.CUSTOMER && reservation.guestCount === 1 &&
+      reservation.status === ReservationStatusCustomer.Reserved &&
+      !!this.ownerUserId() && reservation.customerId === this.ownerUserId() &&
+      Number.isFinite(cutoff) && this.now() <= cutoff &&
+      (reservation.preOrder == null || reservation.preOrder.status === 0);
+  });
+  readonly singleSubmitDisabledReason = computed(() => {
+    const items = this.r().preOrder?.orderItems;
+    return items?.length ? '' : 'Add dishes to this reservation before submitting.';
+  });
+  readonly submitSinglePreOrder = output<string>();
+
+  onSubmitSinglePreOrder(): void {
+    this.now.set(Date.now());
+    if (!this.showSingleSubmit() || this.singleSubmitDisabledReason() || this.submitLoading()) return;
+    this.submitSinglePreOrder.emit(this.r().id);
   }
 
   copyInvitationLink(): void {

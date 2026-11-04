@@ -65,6 +65,11 @@ public class GroupPreOrderRepositoryTests : IDisposable
         Assert.Empty(order.ExpressionAttributeValues[":oldDishes"].L);
         Assert.Single(order.ExpressionAttributeValues[":newDishes"].L);
         Assert.Contains("dishes = :oldDishes", order.ConditionExpression);
+        Assert.Contains("attribute_not_exists(#rev)", order.ConditionExpression);
+        Assert.Contains("#rev = if_not_exists(#rev, :zero) + :one", order.UpdateExpression);
+        Assert.Contains("#finalized = :true", order.UpdateExpression);
+        Assert.Contains("attribute_not_exists(#finalized) OR #finalized = :false", order.ConditionExpression);
+        Assert.Equal("1", order.ExpressionAttributeValues[":true"].N);
         Assert.Equal("test-groups", saved.TransactItems[1].Update.TableName);
         Assert.Contains("startTime = :startTime", saved.TransactItems[2].ConditionCheck.ConditionExpression);
         Assert.Equal("test-sessions", saved.TransactItems[3].ConditionCheck.TableName);

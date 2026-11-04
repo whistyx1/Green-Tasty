@@ -18,7 +18,9 @@
         [r]="reservation"
         [role]="role()"
         [ownerUserId]="customerId()"
+        [submitLoading]="submissionLoadingId() === reservation.id"
         [statusEnum]="statusEnum"
+        (submitSinglePreOrder)="openSubmission($event)"
         (cancelReservation)="cancelReservation($event)"
         (editReservation)="openEditModal($event)"
         (leaveFeedbackReservation)="openFeedback($event)"
@@ -43,6 +45,15 @@
       Book a table
     </a>
   </div>
+}
+
+@if (submissionError()) {
+  <p class="reservation-empty" role="alert">{{ submissionError() }}</p>
+}
+
+@if (submissionOrder()) {
+  <app-submission-confirmation kind="ordinary" [items]="submissionItems()" [busy]="submittingOrder()"
+    (closed)="closeSubmission()" (confirmed)="confirmSubmission()" />
 }
 
 @if (

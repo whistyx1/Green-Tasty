@@ -2,6 +2,7 @@
 using APIHandler.Constants;
 using APIHandler.Entities;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -52,5 +53,16 @@ public class GroupReservationRepository : IGroupReservationRepository
         }).GetRemainingAsync();
 
         return results.FirstOrDefault();
+    }
+
+    public async Task<IReadOnlyList<GroupReservation>> GetAllByReservationIdAsync(string reservationId)
+    {
+        var results = await _dynamoDbContext.QueryAsync<GroupReservation>(reservationId, new QueryConfig
+        {
+            OverrideTableName = GroupReservationsTableName,
+            IndexName = GlobalSecondaryIndexes.GroupReservation.ReservationId,
+        }).GetRemainingAsync();
+
+        return results;
     }
 }

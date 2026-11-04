@@ -19,6 +19,7 @@ public class OrderServiceTests
 {
     private readonly Mock<IOrderRepository> _mockOrderRepository;
     private readonly Mock<IReservationRepository> _mockReservationRepository;
+    private readonly Mock<APIHandler.Repositories.GroupReservations.IGroupReservationRepository> _mockGroupReservationRepository;
     private readonly Mock<IDishService> _mockDishService;
     private readonly Mock<INotificationService> _mockNotificationService;
     private readonly Mock<ILambdaLogger> _mockLogger;
@@ -29,6 +30,7 @@ public class OrderServiceTests
     {
         _mockOrderRepository = new Mock<IOrderRepository>();
         _mockReservationRepository = new Mock<IReservationRepository>();
+        _mockGroupReservationRepository = new Mock<APIHandler.Repositories.GroupReservations.IGroupReservationRepository>();
         _mockDishService = new Mock<IDishService>();
         _mockNotificationService = new Mock<INotificationService>();
         _mockLogger = new Mock<ILambdaLogger>();
@@ -40,7 +42,8 @@ public class OrderServiceTests
             _mockOrderRepository.Object,
             _mockReservationRepository.Object,
             _mockDishService.Object,
-            _mockNotificationService.Object
+            _mockNotificationService.Object,
+            _mockGroupReservationRepository.Object
         );
     }
 
@@ -87,7 +90,8 @@ public class OrderServiceTests
         reservation.StartTime = DateTime.UtcNow.AddHours(1);
 
         order.OrderId = "ord-1";
-        order.Status = OrderStatus.Created;
+        order.Status = OrderStatus.SubmittedByCustomer;
+        order.GroupFinalized = true;
         order.Dishes = new List<OrderItem> { new OrderItem { DishId = dishId, State = OrderItemState.Pending } };
 
         _mockReservationRepository.Setup(r => r.GetReservationByIdAsync(reservationId)).ReturnsAsync(reservation);
@@ -97,7 +101,7 @@ public class OrderServiceTests
 
         Assert.Equal(OrderItemState.Confirmed, order.Dishes[0].State);
         Assert.Equal(OrderStatus.Submitted, order.Status);
-        _mockOrderRepository.Verify(r => r.SaveOrderAsync(order), Times.Once);
+        _mockOrderRepository.Verify(r => r.SaveOrderIfUnchangedAsync(order, It.Is<Order>(previous => previous.Status == OrderStatus.SubmittedByCustomer && previous.GroupFinalized && previous.Dishes[0].State == OrderItemState.Pending)), Times.Once);
     }
 
     [Theory]
@@ -166,7 +170,8 @@ public class OrderServiceTests
         reservation.WaiterId = callerId;
         reservation.StartTime = DateTime.UtcNow.AddHours(1);
         order.OrderId = "ord-1";
-        order.Status = OrderStatus.Created;
+        order.Status = OrderStatus.SubmittedByCustomer;
+        order.GroupFinalized = true;
         order.Dishes = new List<OrderItem>
         {
             new OrderItem { DishId = dishToCancelId, State = OrderItemState.Pending },
@@ -180,7 +185,7 @@ public class OrderServiceTests
 
         Assert.Equal(OrderItemState.Canceled, order.Dishes[0].State);
         Assert.Equal(OrderStatus.Submitted, order.Status);
-        _mockOrderRepository.Verify(r => r.SaveOrderAsync(order), Times.Once);
+        _mockOrderRepository.Verify(r => r.SaveOrderIfUnchangedAsync(order, It.Is<Order>(previous => previous.Status == OrderStatus.SubmittedByCustomer && previous.GroupFinalized && previous.Dishes[0].State == OrderItemState.Pending)), Times.Once);
     }
 
     [Theory]
@@ -375,7 +380,8 @@ public class OrderServiceTests
         reservation.Status = ReservationStatus.Reserved;
         reservation.StartTime = DateTime.UtcNow.AddHours(2);
         order.OrderId = "ord-1";
-        order.Dishes = new List<OrderItem>();
+        order.Dishes = [new OrderItem { DishId = "old-dish", Quantity = 1 }];
+        order.Revision = 2;
         availableDish.State = DishState.Available;
 
         _mockReservationRepository.Setup(r => r.GetReservationByIdAsync(reservationId)).ReturnsAsync(reservation);
@@ -384,7 +390,9 @@ public class OrderServiceTests
 
         await _orderService.EditPreOrderAsync(customerId, reservationId, newDishes, _mockLambdaContext.Object);
 
-        _mockOrderRepository.Verify(r => r.SaveOrderAsync(It.Is<Order>(o => o.Dishes.Count == 1 && o.Dishes[0].DishId == availableDish.Id)), Times.Once);
+        _mockOrderRepository.Verify(r => r.SaveOrderIfUnchangedAsync(
+            It.Is<Order>(o => o.Dishes.Count == 1 && o.Dishes[0].DishId == availableDish.Id),
+            It.Is<Order>(previous => previous.Dishes.Count == 1 && previous.Dishes[0].DishId == "old-dish" && previous.Revision == 2), true), Times.Once);
     }
 
     [Theory]
@@ -452,7 +460,7 @@ public class OrderServiceTests
 
         await _orderService.EditPreOrderForWaiterAsync(waiterId, reservationId, newDishes, _mockLambdaContext.Object);
 
-        _mockOrderRepository.Verify(r => r.SaveOrderAsync(It.Is<Order>(o => o.Dishes.Count == 1)), Times.Once);
+        _mockOrderRepository.Verify(r => r.SaveOrderIfUnchangedAsync(It.Is<Order>(o => o.Dishes.Count == 1), It.IsAny<Order>(), true), Times.Once);
     }
 
     [Theory]
@@ -496,7 +504,7 @@ public class OrderServiceTests
         await _orderService.CancelPreOrderAsync(customerId, reservationId, _mockLambdaContext.Object);
 
         Assert.Equal(OrderStatus.Cancelled, order.Status);
-        _mockOrderRepository.Verify(r => r.SaveOrderAsync(order), Times.Once);
+        _mockOrderRepository.Verify(r => r.SaveOrderIfUnchangedAsync(order, It.Is<Order>(previous => previous.Status == OrderStatus.Created), true), Times.Once);
     }
 
     [Theory]
@@ -531,7 +539,11 @@ public class OrderServiceTests
         var customerId = "cust-1";
         var reservationId = reservation.Id;
         reservation.CustomerId = customerId;
+        reservation.Status = ReservationStatus.Reserved;
+        reservation.StartTime = DateTime.UtcNow.AddHours(2);
         order.OrderId = "ord-1";
+        order.CustomerId = customerId;
+        order.ReservationId = reservationId;
         order.Status = OrderStatus.Created;
 
         _mockReservationRepository.Setup(r => r.GetReservationByIdAsync(reservationId)).ReturnsAsync(reservation);
@@ -539,8 +551,141 @@ public class OrderServiceTests
 
         await _orderService.SubmitPreOrderAsync(customerId, reservationId, _mockLambdaContext.Object);
 
-        Assert.Equal(OrderStatus.SubmittedByCustomer, order.Status);
-        _mockOrderRepository.Verify(r => r.SaveOrderAsync(order), Times.Once);
+        _mockOrderRepository.Verify(r => r.SubmitOrderIfEligibleAsync(order, reservation), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(ReservationStatus.Cancelled)]
+    [InlineData(ReservationStatus.InProgress)]
+    [InlineData(ReservationStatus.Completed)]
+    public async Task SubmitPreOrderAsync_RejectsInactiveReservation(ReservationStatus status)
+    {
+        var (reservation, _) = SetupValidSubmission();
+        reservation.Status = status;
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            _orderService.SubmitPreOrderAsync("owner", reservation.Id, _mockLambdaContext.Object));
+        _mockOrderRepository.Verify(r => r.SubmitOrderIfEligibleAsync(It.IsAny<Order>(), It.IsAny<Reservation>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SubmitPreOrderAsync_RejectsExpiredCutoff()
+    {
+        var (reservation, _) = SetupValidSubmission();
+        reservation.StartTime = DateTime.UtcNow.AddMinutes(29);
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            _orderService.SubmitPreOrderAsync("owner", reservation.Id, _mockLambdaContext.Object));
+        _mockOrderRepository.Verify(r => r.SubmitOrderIfEligibleAsync(It.IsAny<Order>(), It.IsAny<Reservation>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SubmitPreOrderAsync_RejectsEmptyCart()
+    {
+        var (reservation, order) = SetupValidSubmission();
+        order.Dishes.Clear();
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            _orderService.SubmitPreOrderAsync("owner", reservation.Id, _mockLambdaContext.Object));
+        _mockOrderRepository.Verify(r => r.SubmitOrderIfEligibleAsync(It.IsAny<Order>(), It.IsAny<Reservation>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(OrderStatus.Submitted)]
+    [InlineData(OrderStatus.SubmittedByCustomer)]
+    [InlineData(OrderStatus.Cancelled)]
+    public async Task SubmitPreOrderAsync_RejectsNonDraftAndDuplicateSubmission(OrderStatus status)
+    {
+        var (reservation, order) = SetupValidSubmission();
+        order.Status = status;
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            _orderService.SubmitPreOrderAsync("owner", reservation.Id, _mockLambdaContext.Object));
+        _mockOrderRepository.Verify(r => r.SubmitOrderIfEligibleAsync(It.IsAny<Order>(), It.IsAny<Reservation>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SubmitPreOrderAsync_RejectsOrderForAnotherReservation()
+    {
+        var (reservation, order) = SetupValidSubmission();
+        order.ReservationId = "another-reservation";
+
+        await Assert.ThrowsAsync<ActionForbiddenException>(() =>
+            _orderService.SubmitPreOrderAsync("owner", reservation.Id, _mockLambdaContext.Object));
+        _mockOrderRepository.Verify(r => r.SubmitOrderIfEligibleAsync(It.IsAny<Order>(), It.IsAny<Reservation>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SubmitPreOrderAsync_RejectsOrderOwnedByAnotherCustomer()
+    {
+        var (reservation, order) = SetupValidSubmission();
+        order.CustomerId = "another-customer";
+
+        await Assert.ThrowsAsync<ActionForbiddenException>(() =>
+            _orderService.SubmitPreOrderAsync("owner", reservation.Id, _mockLambdaContext.Object));
+        _mockOrderRepository.Verify(r => r.SubmitOrderIfEligibleAsync(It.IsAny<Order>(), It.IsAny<Reservation>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("edit", false)]
+    [InlineData("cancel", false)]
+    [InlineData("unsubmit", false)]
+    [InlineData("edit", true)]
+    [InlineData("cancel", true)]
+    [InlineData("unsubmit", true)]
+    public async Task CustomerMutation_RejectsFinalizedGroupIncludingLegacyRecords(string action, bool hasMarker)
+    {
+        var (reservation, order) = SetupValidSubmission();
+        order.GroupFinalized = hasMarker;
+        if (action == "unsubmit") order.Status = OrderStatus.SubmittedByCustomer;
+        if (!hasMarker)
+            _mockGroupReservationRepository.Setup(repository => repository.GetAllByReservationIdAsync(reservation.Id))
+                .ReturnsAsync([new GroupReservation { GroupReservationId = "group", ReservationId = reservation.Id,
+                    ReservationToken = "unused", Status = GroupReservationStatus.Open },
+                    new GroupReservation { GroupReservationId = "finalized-group", ReservationId = reservation.Id,
+                    ReservationToken = "unused-2", Status = GroupReservationStatus.Submitted }]);
+        _mockDishService.Setup(service => service.GetDishByIdAsync("dish"))
+            .ReturnsAsync(new Dish { Id = "dish", State = DishState.Available });
+
+        Task mutate = action switch {
+            "edit" => _orderService.EditPreOrderAsync("owner", reservation.Id,
+                [new OrderItem { DishId = "dish", Quantity = 2 }], _mockLambdaContext.Object),
+            "cancel" => _orderService.CancelPreOrderAsync("owner", reservation.Id, _mockLambdaContext.Object),
+            _ => _orderService.UnSubmitPreOrderAsync("owner", reservation.Id, _mockLambdaContext.Object)
+        };
+
+        await Assert.ThrowsAsync<ValidationException>(() => mutate);
+        _mockOrderRepository.Verify(repository => repository.SaveOrderIfUnchangedAsync(
+            It.IsAny<Order>(), It.IsAny<Order>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task WaiterFullOrderEdit_RejectsFinalizedGroup()
+    {
+        var (reservation, order) = SetupValidSubmission();
+        reservation.Status = ReservationStatus.InProgress;
+        order.GroupFinalized = true;
+        _mockDishService.Setup(service => service.GetDishByIdAsync("dish"))
+            .ReturnsAsync(new Dish { Id = "dish", State = DishState.Available });
+
+        await Assert.ThrowsAsync<ValidationException>(() => _orderService.EditPreOrderForWaiterAsync(
+            "waiter", reservation.Id, [new OrderItem { DishId = "dish", Quantity = 2 }],
+            _mockLambdaContext.Object));
+
+        _mockOrderRepository.Verify(repository => repository.SaveOrderIfUnchangedAsync(
+            It.IsAny<Order>(), It.IsAny<Order>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    private (Reservation Reservation, Order Order) SetupValidSubmission()
+    {
+        var reservation = new Reservation { Id = "reservation", CustomerId = "owner", WaiterId = "waiter",
+            TableId = "table", StartTime = DateTime.UtcNow.AddHours(2), Status = ReservationStatus.Reserved };
+        var order = new Order { OrderId = "order", CustomerId = "owner", ReservationId = reservation.Id,
+            ReservationAddress = "Test", ReservationTime = "Later", Status = OrderStatus.Created,
+            Dishes = [new OrderItem { DishId = "dish", Quantity = 1 }] };
+        _mockReservationRepository.Setup(r => r.GetReservationByIdAsync(reservation.Id)).ReturnsAsync(reservation);
+        _mockOrderRepository.Setup(r => r.GetOrderByReservationIdAsync(reservation.Id)).ReturnsAsync(order);
+        return (reservation, order);
     }
 
     [Theory]
@@ -585,7 +730,7 @@ public class OrderServiceTests
         await _orderService.UnSubmitPreOrderAsync(customerId, reservationId, _mockLambdaContext.Object);
 
         Assert.Equal(OrderStatus.Created, order.Status);
-        _mockOrderRepository.Verify(r => r.SaveOrderAsync(order), Times.Once);
+        _mockOrderRepository.Verify(r => r.SaveOrderIfUnchangedAsync(order, It.Is<Order>(previous => previous.Status == OrderStatus.SubmittedByCustomer), true), Times.Once);
     }
 
     [Theory]

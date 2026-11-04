@@ -148,6 +148,22 @@
         </span>
       }
     }
+    @if (showSingleSubmit()) {
+      <button
+        type="button"
+        class="button button--primary button--large"
+        [disabled]="!!singleSubmitDisabledReason() || submitLoading()"
+        [attr.aria-describedby]="singleSubmitDisabledReason() ? 'submit-reason-' + r().id : null"
+        (click)="onSubmitSinglePreOrder()"
+      >
+        {{ submitLoading() ? 'Loading…' : 'Submit Pre-order' }}
+      </button>
+      @if (singleSubmitDisabledReason()) {
+        <span [id]="'submit-reason-' + r().id" class="invite-disabled-reason" role="status">
+          {{ singleSubmitDisabledReason() }}
+        </span>
+      }
+    }
     @switch (r().status) {
       @case (ReservationStatusCustomer.Reserved) {
         <button

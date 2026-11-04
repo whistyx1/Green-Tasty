@@ -6,6 +6,7 @@ using APIHandler.Entities;
 using APIHandler.Exceptions;
 using APIHandler.Helpers;
 using APIHandler.Repositories.Orders;
+using APIHandler.Repositories.GroupReservations;
 using APIHandler.Repositories.Reservations;
 using APIHandler.Services.Dishes;
 using APIHandler.Services.Notifications;
@@ -20,6 +21,7 @@ public class OrderService : IOrderService
 {
     private readonly IOrderRepository _orderRepository;
     private readonly IReservationRepository _reservationRepository;
+    private readonly IGroupReservationRepository _groupReservationRepository;
     private readonly IDishService _dishService;
     private readonly INotificationService _notificationService;
 
@@ -27,12 +29,14 @@ public class OrderService : IOrderService
         IOrderRepository orderRepository,
         IReservationRepository reservationRepository,
         IDishService dishService,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        IGroupReservationRepository groupReservationRepository)
     {
         _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
         _reservationRepository = reservationRepository ?? throw new ArgumentNullException(nameof(reservationRepository));
         _dishService = dishService ?? throw new ArgumentNullException(nameof(dishService));
         _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
+        _groupReservationRepository = groupReservationRepository ?? throw new ArgumentNullException(nameof(groupReservationRepository));
     }
 
     public async Task<IEnumerable<Order>> GetOrdersByCustomerIdAsync(string customerId)
@@ -48,6 +52,7 @@ public class OrderService : IOrderService
         EnsurePreOrderEditable(reservation.StartTime);
 
         var order = await LoadOrderByReservationIdAsync(reservationId);
+        var previous = SnapshotOrder(order);
         bool shouldSubmit = ConfirmDishInOrder(order, dishId);
 
         if (shouldSubmit)
@@ -56,7 +61,7 @@ public class OrderService : IOrderService
             logger.Log($"Order {order.OrderId} marked as Submitted (all dishes confirmed/canceled and at least one confirmed).");
         }
 
-        await _orderRepository.SaveOrderAsync(order);
+        await _orderRepository.SaveOrderIfUnchangedAsync(order, previous);
         logger.Log($"Confirmed dish {dishId} in order {order.OrderId}.");
     }
 
@@ -68,6 +73,7 @@ public class OrderService : IOrderService
         EnsurePreOrderEditable(reservation.StartTime);
 
         var order = await LoadOrderByReservationIdAsync(reservationId);
+        var previous = SnapshotOrder(order);
 
         bool shouldSubmit = CancelDishInOrder(order, dishId);
 
@@ -77,7 +83,7 @@ public class OrderService : IOrderService
             logger.Log($"Order {order.OrderId} marked as Submitted (all dishes confirmed/canceled and at least one confirmed).");
         }
 
-        await _orderRepository.SaveOrderAsync(order);
+        await _orderRepository.SaveOrderIfUnchangedAsync(order, previous);
         logger.Log($"Canceled dish {dishId} in order {order.OrderId}.");
     }
 
@@ -175,9 +181,11 @@ public class OrderService : IOrderService
         }
 
         var order = await GetActiveOrderByReservationIdAsync(reservationId, throwIfNotFound: true);
+        await EnsureCustomerOrderMutableAsync(order!);
+        var previous = SnapshotOrder(order!);
         order!.Status = OrderStatus.Cancelled;
 
-        await _orderRepository.SaveOrderAsync(order);
+        await _orderRepository.SaveOrderIfUnchangedAsync(order, previous, protectFinalizedGroup: true);
         context.Logger.LogLine($"Pre-order {order.OrderId} for reservation {reservationId} cancelled by customer {customerId}.");
     }
 
@@ -190,10 +198,20 @@ public class OrderService : IOrderService
             throw new ActionForbiddenException("You are not authorized to submit this pre-order.");
         }
 
-        var order = await GetActiveOrderByReservationIdAsync(reservationId, throwIfNotFound: true);
-        order!.Status = OrderStatus.SubmittedByCustomer;
+        if (reservation.Status != ReservationStatus.Reserved)
+            throw new ValidationException("Only an active reservation can submit a pre-order.");
+        EnsurePreOrderEditable(reservation.StartTime);
 
-        await _orderRepository.SaveOrderAsync(order);
+        var order = await GetActiveOrderByReservationIdAsync(reservationId, throwIfNotFound: true);
+        if (order!.ReservationId != reservationId ||
+            !string.Equals(order.CustomerId, customerId, StringComparison.OrdinalIgnoreCase))
+            throw new ActionForbiddenException("This pre-order does not belong to the reservation owner.");
+        if (order.Status != OrderStatus.Created)
+            throw new ValidationException("Only a draft pre-order can be submitted.");
+        if (order.Dishes is not { Count: > 0 })
+            throw new ValidationException("Add at least one dish before submitting the pre-order.");
+
+        await _orderRepository.SubmitOrderIfEligibleAsync(order, reservation);
         context.Logger.LogLine($"Pre-order {order.OrderId} for reservation {reservationId} submitted by customer {customerId}.");
     }
 
@@ -212,10 +230,12 @@ public class OrderService : IOrderService
             throw new ValidationException("No pre-order found for the given reservation.");
         }
         EnsurePreOrderEditable(reservation.StartTime);
+        await EnsureCustomerOrderMutableAsync(order);
 
+        var previous = SnapshotOrder(order);
         order.Status = OrderStatus.Created;
 
-        await _orderRepository.SaveOrderAsync(order);
+        await _orderRepository.SaveOrderIfUnchangedAsync(order, previous, protectFinalizedGroup: true);
         context.Logger.LogLine($"Pre-order {order.OrderId} for reservation {reservationId} submitted by customer {customerId}.");
     }
 
@@ -239,6 +259,8 @@ public class OrderService : IOrderService
             throw new ValidationException("One or more dishes in the request are invalid, unavailable, or have a quantity of 0.");
 
         var order = await GetActiveOrderByReservationIdAsync(reservationId, throwIfNotFound: true);
+        await EnsureCustomerOrderMutableAsync(order!);
+        var previous = SnapshotOrder(order!);
         order!.Dishes.Clear();
 
         foreach (var dish in newDishes)
@@ -251,7 +273,34 @@ public class OrderService : IOrderService
             });
         }
 
-        await _orderRepository.SaveOrderAsync(order);
+        await _orderRepository.SaveOrderIfUnchangedAsync(order, previous, protectFinalizedGroup: true);
+    }
+
+    private static Order SnapshotOrder(Order order) => new()
+    {
+        OrderId = order.OrderId,
+        CustomerId = order.CustomerId,
+        ReservationId = order.ReservationId,
+        ReservationAddress = order.ReservationAddress,
+        ReservationTime = order.ReservationTime,
+        Status = order.Status,
+        Revision = order.Revision,
+        GroupFinalized = order.GroupFinalized,
+        Dishes = order.Dishes.Select(item => new OrderItem
+        {
+            DishId = item.DishId,
+            Quantity = item.Quantity,
+            State = item.State
+        }).ToList()
+    };
+
+    private async Task EnsureCustomerOrderMutableAsync(Order order)
+    {
+        if (order.GroupFinalized)
+            throw new ValidationException("The finalized group order cannot be changed through ordinary order actions.");
+        var groups = await _groupReservationRepository.GetAllByReservationIdAsync(order.ReservationId);
+        if (groups?.Any(group => group.Status != GroupReservationStatus.Open) == true)
+            throw new ValidationException("The finalized or closed group order cannot be changed through ordinary order actions.");
     }
 
     private async Task<Order?> GetActiveOrderByReservationIdAsync(string reservationId, bool throwIfNotFound = true)

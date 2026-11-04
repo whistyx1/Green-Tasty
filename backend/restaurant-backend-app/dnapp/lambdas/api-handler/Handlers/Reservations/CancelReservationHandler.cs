@@ -59,7 +59,8 @@ public class CancelReservationHandler : IApiRequestHandler
                 return ResponseBuilder.CreateErrorResponse(400, "Too late to cancel reservation. Must be 30 minutes before reservation time", context.Logger);
 
             reservation.Status = ReservationStatus.Cancelled;
-            await _reservationService.UpdateReservationAsync(reservation);
+            if (!await _reservationService.UpdateReservationAsync(reservation))
+                return ResponseBuilder.CreateErrorResponse(503, "Reservation cancellation could not be saved. Please retry.", context.Logger);
 
             var waiter = await _waiterService.FindWaiterByReservationIdAsync(reservation.Id);
             if (waiter != null)

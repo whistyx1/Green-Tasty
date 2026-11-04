@@ -38,4 +38,12 @@ public class Order
     [DynamoDBProperty("status", typeof(EnumAsIntConverter<OrderStatus>))]
     [JsonPropertyName("status")]
     public OrderStatus Status { get; set; }
+
+    [DynamoDBProperty("revision")]
+    [JsonIgnore]
+    public long Revision { get; set; }
+
+    [DynamoDBProperty("groupFinalized")]
+    [JsonIgnore]
+    public bool GroupFinalized { get; set; }
 }

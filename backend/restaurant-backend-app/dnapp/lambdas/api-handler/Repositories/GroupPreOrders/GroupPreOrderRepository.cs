@@ -52,11 +52,14 @@ public class GroupPreOrderRepository(IAmazonDynamoDB client, IDynamoDBContext co
             new() { Update = new Update {
                 TableName = ResourceNames.OrdersTableName,
                 Key = new() { ["orderId"] = originalOrder["orderId"], ["customerId"] = originalOrder["customerId"] },
-                UpdateExpression = "SET #s = :newStatus, dishes = :newDishes",
-                ConditionExpression = "#s = :oldStatus AND reservationId = :reservation AND dishes = :oldDishes",
-                ExpressionAttributeNames = new() { ["#s"] = "status" },
+                UpdateExpression = "SET #s = :newStatus, dishes = :newDishes, #rev = if_not_exists(#rev, :zero) + :one, #finalized = :true",
+                ConditionExpression = "#s = :oldStatus AND reservationId = :reservation AND dishes = :oldDishes AND (attribute_not_exists(#finalized) OR #finalized = :false) AND " +
+                    (order.Revision == 0 ? "(attribute_not_exists(#rev) OR #rev = :expectedRevision)" : "#rev = :expectedRevision"),
+                ExpressionAttributeNames = new() { ["#s"] = "status", ["#rev"] = "revision", ["#finalized"] = "groupFinalized" },
                 ExpressionAttributeValues = new() { [":oldStatus"] = originalOrder["status"], [":newStatus"] = newOrder["status"],
-                    [":oldDishes"] = originalOrder["dishes"], [":newDishes"] = newOrder["dishes"], [":reservation"] = originalOrder["reservationId"] }
+                    [":oldDishes"] = originalOrder["dishes"], [":newDishes"] = newOrder["dishes"], [":reservation"] = originalOrder["reservationId"],
+                    [":expectedRevision"] = originalOrder["revision"], [":zero"] = new AttributeValue { N = "0" }, [":one"] = new AttributeValue { N = "1" },
+                    [":true"] = new AttributeValue { N = "1" }, [":false"] = new AttributeValue { N = "0" } }
             } },
             new() { Update = new Update {
                 TableName = ResourceNames.GroupReservationsTableName,

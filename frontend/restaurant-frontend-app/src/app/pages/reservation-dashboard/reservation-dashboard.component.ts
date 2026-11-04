@@ -17,6 +17,7 @@ import {
   map,
   of,
   switchMap,
+  throwError,
 } from 'rxjs';
 
 import { AuthenticationService } from '@app/auth/services/authentication.service';
@@ -25,6 +26,7 @@ import { FeedbackWindowComponent } from '@app/components/reservations/feedback-w
 import { ReservationConfirmedComponent } from '@app/components/reservations/reservation-confirmed/reservation-confirmed.component';
 import { MakeReservationComponent } from '@app/components/tables/make-reservation/make-reservation.component';
 import { FeedbackUpdatedEvent } from '@app/models/feedbacks/feedback.model';
+import { Order } from '@app/models/orders/order.model';
 import {
   Reservation,
   ReservationCustomer,
@@ -39,6 +41,7 @@ import { ReservationService } from '@app/services/reservation/reservation.servic
 import { TableService } from '@app/services/table/table.service';
 import { Roles } from '@app/shared/constants/roles';
 import { HeaderComponent } from '@app/shared/custom-components/header/header.component';
+import { SubmissionConfirmationComponent, SubmissionItem } from '@app/shared/custom-components/submission-confirmation/submission-confirmation.component';
 import {
   formatTime,
   revertFormatDate,
@@ -59,6 +62,7 @@ interface ReservationStatusView {
     MakeReservationComponent,
     ReservationConfirmedComponent,
     FeedbackWindowComponent,
+    SubmissionConfirmationComponent,
   ],
   templateUrl: './reservation-dashboard.component.html',
   styleUrl: './reservation-dashboard.component.scss',
@@ -86,6 +90,17 @@ export class ReservationDashboardComponent implements OnInit {
 
   readonly reservations = signal<ReservationCustomer[]>([]);
   readonly reservationsLoaded = signal(false);
+  readonly submissionLoadingId = signal<string | null>(null);
+  readonly submissionOrder = signal<Order | null>(null);
+  readonly submittingOrder = signal(false);
+  readonly submissionError = signal('');
+  readonly submissionItems = computed<SubmissionItem[]>(() =>
+    this.submissionOrder()?.orderItems.map(item => ({
+      name: item.dish.name,
+      quantity: item.quantity,
+      unitPrice: item.dish.price,
+    })) ?? []
+  );
 
   readonly selectedReservation =
     signal<ReservationCustomer | null>(null);
@@ -172,6 +187,105 @@ export class ReservationDashboardComponent implements OnInit {
     this.role.set(user.role);
     this.customerId.set(user.id);
 
+    this.loadReservations();
+  }
+
+  openSubmission(reservationId: string): void {
+    const reservation = this.reservations().find(item => item.id === reservationId);
+    if (!reservation || !this.canSubmitReservation(reservation) ||
+        !reservation.preOrder?.orderItems?.length || this.submissionLoadingId() ||
+        this.submissionOrder() || this.submittingOrder()) return;
+
+    this.submissionError.set('');
+    this.submissionLoadingId.set(reservationId);
+    this.ordersService.getByReservationId(reservationId)
+      .pipe(
+        finalize(() => this.submissionLoadingId.set(null)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: order => {
+          const currentReservation = this.reservations().find(item => item.id === reservationId);
+          if (!currentReservation || !this.canSubmitReservation(currentReservation) ||
+              !this.isDraftForReservation(order, reservationId)) {
+            this.rejectStaleSubmission();
+            return;
+          }
+          this.submissionOrder.set(order);
+        },
+        error: () => this.rejectStaleSubmission(),
+      });
+  }
+
+  closeSubmission(): void {
+    if (!this.submittingOrder()) this.submissionOrder.set(null);
+  }
+
+  confirmSubmission(): void {
+    const selected = this.submissionOrder();
+    if (!selected || this.submittingOrder()) return;
+    const reservation = this.reservations().find(item => item.id === selected.reservationId);
+    if (!reservation || !this.canSubmitReservation(reservation)) {
+      this.rejectStaleSubmission();
+      return;
+    }
+
+    this.submittingOrder.set(true);
+    forkJoin({
+      reservation: this.reservationService.getReservationById(selected.reservationId),
+      order: this.ordersService.getByReservationId(selected.reservationId),
+    }).pipe(
+      switchMap(({ reservation: freshReservation, order }) => {
+        if (!freshReservation || !this.canSubmitReservation(freshReservation) ||
+            !this.isDraftForReservation(order, selected.reservationId) ||
+            !this.sameSubmissionItems(selected, order)) {
+          return throwError(() => new Error('Pre-order changed before submission.'));
+        }
+        return this.ordersService.submitPreOrderByReservationId(selected.reservationId);
+      }),
+      finalize(() => this.submittingOrder.set(false)),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe({
+      next: () => {
+        this.submissionOrder.set(null);
+        this.submissionError.set('');
+        this.reservations.update(items => items.map(item =>
+          item.id === selected.reservationId
+            ? { ...item, preOrder: item.preOrder ? { ...item.preOrder, status: 3 } : undefined,
+                hasSubmittedPreOrder: true }
+            : item
+        ));
+        this.loadReservations();
+      },
+      error: () => this.rejectStaleSubmission(),
+    });
+  }
+
+  private canSubmitReservation(reservation: ReservationCustomer): boolean {
+    const cutoff = new Date(reservation.startTime).getTime() - 30 * 60_000;
+    return reservation.guestCount === 1 &&
+      reservation.status === ReservationStatusCustomer.Reserved &&
+      reservation.customerId === this.customerId() &&
+      Number.isFinite(cutoff) && Date.now() <= cutoff;
+  }
+
+  private isDraftForReservation(order: Order | null, reservationId: string): order is Order {
+    return !!order && order.reservationId === reservationId && order.status === 0 &&
+      Array.isArray(order.orderItems) && order.orderItems.length > 0 &&
+      order.orderItems.every(item => Number.isInteger(item.quantity) && item.quantity > 0 &&
+        !!item.dish?.id && typeof item.dish.name === 'string' &&
+        Number.isFinite(item.dish.price));
+  }
+
+  private sameSubmissionItems(first: Order, second: Order): boolean {
+    return first.orderId === second.orderId &&
+      JSON.stringify(first.orderItems.map(item => [item.dish.id, item.dish.name, item.dish.price, item.quantity])) ===
+      JSON.stringify(second.orderItems.map(item => [item.dish.id, item.dish.name, item.dish.price, item.quantity]));
+  }
+
+  private rejectStaleSubmission(): void {
+    this.submissionOrder.set(null);
+    this.submissionError.set('This pre-order is no longer ready to submit. Review your reservation and try again.');
     this.loadReservations();
   }
 
