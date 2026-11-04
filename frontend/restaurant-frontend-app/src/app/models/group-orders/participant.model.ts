@@ -1,4 +1,5 @@
 export type ParticipantType = 'Owner' | 'Guest';
+export type OrderingPreference = 'Online' | 'InRestaurant';
 
 export interface DishShort {
   id: string;
@@ -20,4 +21,6 @@ export interface Participant {
   items: ParticipantItem[];
   total: number;
   isSubmitted: boolean;
+  orderingPreference?: OrderingPreference;
+  revision?: number;
 }

@@ -17,6 +17,7 @@ public static class OrderMapper
             ReservationAddress = order.ReservationAddress,
             ReservationTime = order.ReservationTime,
             Status = order.Status,
+            Revision = order.Revision,
             OrderItems = order.Dishes
                 .Where(d => dishes.Any(dish => dish.Id == d.DishId))
                 .Select(d => new OrderItemResponse

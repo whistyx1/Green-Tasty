@@ -37,6 +37,11 @@ describe('GuestPreorderStore removed session', () => {
     http.expectOne('https://test.api/guest/sessions/removed-session/menu')
       .flush({ dishes: { MainCourse: [{ id: 'salad', name: 'Salad', price: 8 }] } });
     tick();
+    http.expectOne('https://test.api/guest/sessions/removed-session').flush({
+      name: 'Guest', items: [{ dish: { id: 'salad', name: 'Salad', price: 8 }, quantity: 1 }],
+      total: 8, isSubmitted: false, orderingPreference: 'Online', revision: 0,
+    });
+    tick();
     expect(store.status()).toBe('active');
     expect(store.cartItems().length).toBe(1);
   }
@@ -109,6 +114,48 @@ describe('GuestPreorderStore removed session', () => {
     expect(store.cartItems().length).toBe(1);
   }));
 
+  it('preserves a draft and uses the new revision when switching ordering preference', fakeAsync(() => {
+    openVerifiedSession();
+
+    void store.addDish({ dishId: 'pasta', title: 'Pasta', price: 12 });
+    http.expectOne('https://test.api/guest/sessions/removed-session/dishes').flush({});
+    tick();
+    expect(store.revision()).toBe(1);
+    expect(store.cartItems().length).toBe(2);
+
+    void store.setPreference('InRestaurant');
+    const preference = http.expectOne('https://test.api/guest/sessions/removed-session/ordering-preference');
+    expect(preference.request.method).toBe('PATCH');
+    expect(preference.request.body).toEqual({ preference: 'InRestaurant', expectedRevision: 1 });
+    preference.flush({
+      name: 'Guest', items: [
+        { dish: { id: 'salad', name: 'Salad', price: 8 }, quantity: 1 },
+        { dish: { id: 'pasta', name: 'Pasta', price: 12 }, quantity: 1 },
+      ], total: 20, isSubmitted: false, orderingPreference: 'InRestaurant', revision: 2,
+    });
+    tick();
+    expect(store.orderingPreference()).toBe('InRestaurant');
+    expect(store.cartItems().map(item => item.dishId)).toEqual(['salad', 'pasta']);
+    expect(store.revision()).toBe(2);
+
+    void store.addDish({ dishId: 'soup', title: 'Soup', price: 5 });
+    tick();
+    http.expectNone('https://test.api/guest/sessions/removed-session/dishes');
+
+    void store.setPreference('Online');
+    const restore = http.expectOne('https://test.api/guest/sessions/removed-session/ordering-preference');
+    expect(restore.request.body).toEqual({ preference: 'Online', expectedRevision: 2 });
+    restore.flush({
+      name: 'Guest', items: [
+        { dish: { id: 'salad', name: 'Salad', price: 8 }, quantity: 1 },
+        { dish: { id: 'pasta', name: 'Pasta', price: 12 }, quantity: 1 },
+      ], total: 20, isSubmitted: false, orderingPreference: 'Online', revision: 3,
+    });
+    tick();
+    expect(store.orderingPreference()).toBe('Online');
+    expect(store.cartItems().map(item => item.dishId)).toEqual(['salad', 'pasta']);
+  }));
+
   it('closes the submitted success screen when the Owner removes its session', fakeAsync(() => {
     openVerifiedSession();
     store.submitSuccess();
@@ -151,6 +198,10 @@ describe('GuestPreorderStore removed session', () => {
     tick();
     http.expectOne('https://test.api/guest/sessions/fresh-session/menu')
       .flush({ dishes: { MainCourse: [{ id: 'salad', name: 'Salad', price: 8 }] } });
+    tick();
+    http.expectOne('https://test.api/guest/sessions/fresh-session').flush({
+      name: 'Guest', items: [], total: 0, isSubmitted: false, orderingPreference: 'Online', revision: 0,
+    });
     tick();
 
     expect(store.status()).toBe('active');

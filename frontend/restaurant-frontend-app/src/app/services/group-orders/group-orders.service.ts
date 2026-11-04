@@ -3,6 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { catchError, forkJoin, map, Observable, of, switchMap, tap, throwError } from 'rxjs';
 import { SKIP_ERROR_TOAST } from '@app/auth/skip-error-toast.context';
 import { GroupOrderContext } from '@app/models/group-orders/group-order-context.model';
+import { OrderingPreference } from '@app/models/group-orders/participant.model';
 import { GroupSessionsResponse } from '@app/models/group-orders/group-sessions-response.model';
 import { GroupStatusResponse } from '@app/models/group-orders/group-status.model';
 import { OwnerSessionResponse } from '@app/models/group-orders/owner-session.model';
@@ -97,6 +98,7 @@ export class GroupOrdersService {
         const projection: OwnerOrderProjection = {
           items: order.orderItems.map((item) => ({ dish: item.dish, quantity: item.quantity })),
           editable: order.status === 0,
+          revision: order.revision ?? 0,
           total: order.orderItems.reduce((sum, item) => sum + item.dish.price * item.quantity, 0),
         };
         if (status.status === 'Submitted' || (status.status === 'Closed' && order.status !== 0)) {
@@ -132,6 +134,18 @@ export class GroupOrdersService {
       {
         context: new HttpContext().set(SKIP_ERROR_TOAST, options.silent ?? false),
       }
+    );
+  }
+
+  setOwnerPreference$(reservationId: string, preference: OrderingPreference, expectedRevision: number): Observable<{ orderingPreference: OrderingPreference; isSubmitted: boolean; revision: number }> {
+    return this.http.patch<{ orderingPreference: OrderingPreference; isSubmitted: boolean; revision: number }>(
+      `${this.baseUrl}/reservations/${encodeURIComponent(reservationId)}/group-ordering-preference`, { preference, expectedRevision }
+    );
+  }
+
+  submitOwner$(reservationId: string, expectedOrderRevision: number): Observable<{ orderingPreference: OrderingPreference; isSubmitted: boolean; revision: number }> {
+    return this.http.post<{ orderingPreference: OrderingPreference; isSubmitted: boolean; revision: number }>(
+      `${this.baseUrl}/reservations/${encodeURIComponent(reservationId)}/group-owner-submit`, { expectedOrderRevision }
     );
   }
 

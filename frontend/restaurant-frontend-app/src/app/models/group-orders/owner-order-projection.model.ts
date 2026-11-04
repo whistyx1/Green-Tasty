@@ -5,6 +5,7 @@ export interface OwnerOrderProjection {
   items: ParticipantItem[];
   total: number;
   editable?: boolean;
+  revision?: number;
 }
 
 /** Header fields supplied by GET /reservations/{reservationId}. */

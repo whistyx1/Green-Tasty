@@ -36,6 +36,23 @@
 </div>
 
 <div class="menu-container">
+    @if (store.guestSessionId()) {
+    <section class="ordering-preference" aria-labelledby="guest-preference-title">
+        <h2 id="guest-preference-title">How will you order?</h2>
+        <div class="preference-actions" role="group" aria-label="Ordering preference">
+            <button type="button" [attr.aria-pressed]="store.orderingPreference() === 'Online'"
+                [disabled]="store.preferenceBusy() || store.cartBusy()" (click)="store.setPreference('Online')">Online</button>
+            <button type="button" [attr.aria-pressed]="store.orderingPreference() === 'InRestaurant'"
+                [disabled]="store.preferenceBusy() || store.cartBusy()" (click)="store.setPreference('InRestaurant')">In Restaurant</button>
+        </div>
+        @if (store.orderingPreference() === 'InRestaurant') {
+            <p>Your draft dishes are saved. Switch back to Online to continue and submit them.</p>
+        } @else {
+            <p>Online Pending: {{ store.cartItems().length ? 'submit your draft when it is ready.' : 'add dishes to submit your pre-order.' }}</p>
+        }
+        @if (store.preferenceError()) { <p role="alert">{{ store.preferenceError() }}</p> }
+    </section>
+    }
     <div class="page-navigation">
         <a routerLink="/main">Main page</a>
         <span>›</span>
@@ -85,7 +102,7 @@
                     @for (dish of visibleDishes(); track dish.id) {
                         <app-dish-card
                             [dish]="dish"
-                            [preOrderEnabled]="true"
+                            [preOrderEnabled]="store.orderingPreference() === 'Online' && !store.preferenceBusy()"
                             (preOrderClicked)="addDishToCart(dish)"
                         />
                     }
@@ -102,7 +119,7 @@
 
 <!-- cart drawer -->
 <app-guest-cart-drawer [open]="isCartOpen()" [items]="store.cartItems()" [total]="store.total()"
-    [busy]="store.cartBusy()" [error]="store.cartError()" (closed)="closeCart()"
+    [busy]="store.cartBusy()" [online]="store.orderingPreference() === 'Online'" [error]="store.cartError()" (closed)="closeCart()"
     (goToMenu)="closeCart()" (inc)="store.inc($event)" (dec)="store.dec($event)" (remove)="store.remove($event)"
     (submitted)="openConfirmation()" />
 

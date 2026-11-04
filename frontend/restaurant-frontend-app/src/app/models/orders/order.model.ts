@@ -7,6 +7,7 @@ export interface Order {
   reservationId: string;
   orderItems: OrderItem[];
   status: number;
+  revision?: number;
 }
 
 export interface WaiterPreOrderState {

@@ -8,6 +8,7 @@ export interface Participant {
   id: string;
   name: string;
   isSubmitted: boolean;
+  orderingPreference?: 'Online' | 'InRestaurant';
   items: { dish: Dish; quantity: number }[];
 }
 
@@ -19,7 +20,7 @@ export interface ConsolidatedOrder {
 export function consolidatePreOrder(participants: Participant[]): ConsolidatedOrder {
   const byDish = new Map<string, { dish: Dish; quantity: number }>();
 
-  for (const participant of participants.filter((person) => person.isSubmitted)) {
+  for (const participant of participants.filter((person) => person.isSubmitted && person.orderingPreference !== 'InRestaurant')) {
     for (const item of participant.items) {
       const existing = byDish.get(item.dish.id);
       // завжди НОВИЙ об'єкт — вхідні дані не змінюються

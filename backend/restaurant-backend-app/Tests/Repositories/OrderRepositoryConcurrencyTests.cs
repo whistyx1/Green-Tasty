@@ -186,6 +186,9 @@ public class OrderRepositoryConcurrencyTests : IDisposable
         Assert.Contains("#s = :draft", update.ConditionExpression);
         Assert.Contains("dishes = :dishes", update.ConditionExpression);
         Assert.Contains("reservationId = :reservation", update.ConditionExpression);
+        Assert.Contains("attribute_not_exists(#ownerReady) OR #ownerReady = :false", update.ConditionExpression);
+        Assert.Contains("attribute_not_exists(#finalized) OR #finalized = :false", update.ConditionExpression);
+        Assert.Equal("0", update.ExpressionAttributeValues[":false"].N);
         Assert.Contains("attribute_not_exists(#rev)", update.ConditionExpression);
         Assert.Contains("#rev = if_not_exists(#rev, :zero) + :one", update.UpdateExpression);
         Assert.Equal("0", update.ExpressionAttributeValues[":expectedRevision"].N);
@@ -325,6 +328,7 @@ public class OrderRepositoryConcurrencyTests : IDisposable
 
         Assert.NotNull(captured);
         Assert.Contains("attribute_not_exists(#finalized) OR #finalized = :false", captured.ConditionExpression);
+        Assert.Contains("attribute_not_exists(#ownerReady) OR #ownerReady = :false", captured.ConditionExpression);
         Assert.Equal("0", captured.ExpressionAttributeValues[":false"].N);
     }
 

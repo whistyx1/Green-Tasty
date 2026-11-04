@@ -82,6 +82,31 @@
       @if (empty()) {
         <p class="screen-message">Participants haven't added any dishes yet</p>
       }
+      @if (owner(); as me) {
+        <section class="owner-preference" aria-labelledby="owner-preference-title">
+          <h2 id="owner-preference-title">My ordering preference</h2>
+          <div class="preference-actions" role="group" aria-label="My ordering preference">
+            <button type="button" [attr.aria-pressed]="me.orderingPreference !== 'InRestaurant'"
+              [disabled]="me.isSubmitted || ownerBusy() || status() !== 'Open'"
+              (click)="setOwnerPreference('Online')">Online</button>
+            <button type="button" [attr.aria-pressed]="me.orderingPreference === 'InRestaurant'"
+              [disabled]="me.isSubmitted || ownerBusy() || status() !== 'Open'"
+              (click)="setOwnerPreference('InRestaurant')">In Restaurant</button>
+          </div>
+          @if (me.orderingPreference === 'InRestaurant') {
+            <p>Your saved draft stays here and is excluded from the online group order.</p>
+          } @else if (!me.isSubmitted) {
+            <p>Online Pending: submit your own pre-order when it is ready.</p>
+          } @else {
+            <p>Online Submitted: your pre-order is locked and will be included once.</p>
+          }
+          @if (ownerError()) { <p class="submit-error" role="alert">{{ ownerError() }}</p> }
+          @if (me.orderingPreference !== 'InRestaurant' && !me.isSubmitted && status() === 'Open') {
+            <button type="button" class="secondary-button" [disabled]="ownerBusy() || !ownerPreOrder()?.items?.length"
+              (click)="openOwnerConfirmation()">Submit My Pre-order</button>
+          }
+        </section>
+      }
       <ul class="participants" aria-label="Preorder participants">
         @for (person of participants(); track person.id) {
           <li>
@@ -147,6 +172,10 @@
     }
   </section>
 </main>
+@if (ownerConfirmationOpen()) {
+  <app-submission-confirmation kind="guest" [items]="ownerConfirmationItems()" [busy]="ownerBusy()"
+    (closed)="closeOwnerConfirmation()" (confirmed)="confirmOwnerSubmission()" />
+}
 @if (confirmationOpen()) {
   <app-submission-confirmation kind="group" [items]="confirmationItems()" [busy]="submitting()"
     [pendingGuests]="pendingCount()"

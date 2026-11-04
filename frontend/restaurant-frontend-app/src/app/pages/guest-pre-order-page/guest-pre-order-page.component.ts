@@ -102,7 +102,7 @@ export class GuestPreOrderPageComponent {
     }
 
     openConfirmation(): void {
-        if (this.store.status() !== 'active' || this.store.cartBusy() ||
+        if (this.store.status() !== 'active' || this.store.cartBusy() || this.store.orderingPreference() !== 'Online' ||
             !this.store.cartItems().length || this.submitting()) return;
         this.confirmationOpen.set(true);
     }
@@ -113,7 +113,7 @@ export class GuestPreOrderPageComponent {
 
     async confirmSubmission(): Promise<void> {
         if (!this.confirmationOpen() || this.submitting() || this.store.cartBusy() ||
-            this.store.status() !== 'active' || !this.store.cartItems().length) return;
+            this.store.status() !== 'active' || this.store.orderingPreference() !== 'Online' || !this.store.cartItems().length) return;
         this.submitting.set(true);
         try {
             await this.store.submitPreorder();

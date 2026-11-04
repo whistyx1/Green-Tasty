@@ -99,6 +99,8 @@ public class GuestSessionService(
             throw new ValidationException($"Quantity ({quantity}) must be greater than zero.");
 
         GuestSession session = await GetGuestSessionAsync(guestSessionId);
+        if (OrderingPreference.Effective(session.OrderingPreference) != OrderingPreference.Online)
+            throw new ValidationException("Switch to Online before changing the draft cart.");
 
         string locationId = await GetLocationIdForGroupAsync(session.GroupReservationId);
         var locationDishes = await dishRepository.GetDishesByLocationIdAsync(locationId);
@@ -136,6 +138,8 @@ public class GuestSessionService(
             throw new ValidationException("Quantity must be greater than zero.");
 
         GuestSession session = await GetGuestSessionAsync(guestSessionId);
+        if (OrderingPreference.Effective(session.OrderingPreference) != OrderingPreference.Online)
+            throw new ValidationException("Switch to Online before changing the draft cart.");
 
         if (session.Dishes == null || session.Dishes.Count == 0)
             throw new DishNotFoundException($"Dish {dishId} not found in guest session.");
@@ -221,10 +225,12 @@ public class GuestSessionService(
                 name,
                 items,
                 items.Sum(item => item.Quantity * item.Dish.Price),
-                session.IsSubmitted));
+                session.IsSubmitted, OrderingPreference.Effective(session.OrderingPreference), session.Revision));
         }
 
-        return new GetAllSessionsResponse(participants, participants.Sum(participant => participant.Total));
+        return new GetAllSessionsResponse(participants,
+            participants.Where(participant => participant.OrderingPreference == OrderingPreference.Online)
+                .Sum(participant => participant.Total));
     }
 
     public async Task<GetAllSessionsResponse> DeleteGuestSessionAsync(string userId, string groupReservationId, string guestSessionId)
@@ -252,6 +258,8 @@ public class GuestSessionService(
     public async Task SubmitCartAsync(string guestSessionId)
     {
         GuestSession guestSession = await GetGuestSessionAsync(guestSessionId);
+        if (OrderingPreference.Effective(guestSession.OrderingPreference) != OrderingPreference.Online)
+            throw new ValidationException("Switch to Online before submitting a pre-order.");
 
         if (!guestSession.Dishes.Any())
             throw new CartIsEmptyException();
@@ -260,6 +268,20 @@ public class GuestSessionService(
 
         guestSession.IsSubmitted = true;
         await guestSessionRepository.SaveAsync(guestSession);
+    }
+
+    public async Task<GetGuestSessionResponse> SetPreferenceAsync(string guestSessionId, string preference, long expectedRevision)
+    {
+        if (!OrderingPreference.IsValid(preference))
+            throw new ValidationException("Choose Online or InRestaurant.");
+        var session = await GetGuestSessionAsync(guestSessionId);
+        if (session.Revision != expectedRevision)
+            throw new GroupPreOrderConflictException("Preference changed; reload your session.");
+        if (session.IsOwnerSession)
+            throw new ValidationException("Use the owner preference action for this reservation.");
+        if (OrderingPreference.Effective(session.OrderingPreference) != preference)
+            await guestSessionRepository.SetPreferenceAsync(session, preference);
+        return await GetGuestSessionInfoAsync(guestSessionId);
     }
 
     private async Task<GroupReservation> GetGroupReservationAndValidateAsync(string groupReservationId)
@@ -389,7 +411,8 @@ public class GuestSessionService(
             name = user!.Attributes.First(a => a.Name == "given_name").Value;
         }
 
-        return new GetGuestSessionResponse(name, items, total, session.IsSubmitted);
+        return new GetGuestSessionResponse(name, items, total, session.IsSubmitted,
+            OrderingPreference.Effective(session.OrderingPreference), session.Revision);
     }
 
 }

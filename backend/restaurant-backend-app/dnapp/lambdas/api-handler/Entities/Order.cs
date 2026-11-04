@@ -46,4 +46,8 @@ public class Order
     [DynamoDBProperty("groupFinalized")]
     [JsonIgnore]
     public bool GroupFinalized { get; set; }
+
+    [DynamoDBProperty("ownerGroupReady")]
+    [JsonIgnore]
+    public bool OwnerGroupReady { get; set; }
 }

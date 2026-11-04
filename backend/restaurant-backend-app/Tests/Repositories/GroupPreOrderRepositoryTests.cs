@@ -115,6 +115,60 @@ public class GroupPreOrderRepositoryTests : IDisposable
         Assert.Equal(1, await new APIHandler.Repositories.GuestSessions.GuestSessionRepository(context.Object, _client.Object).CountByGroupReservationId("group"));
     }
 
+    [Fact]
+    public async Task OwnerReadiness_AtomicallyLocksSessionAndExistingOrder()
+    {
+        TransactWriteItemsRequest? saved = null;
+        _client.Setup(c => c.TransactWriteItemsAsync(It.IsAny<TransactWriteItemsRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<TransactWriteItemsRequest, CancellationToken>((request, _) => saved = request)
+            .ReturnsAsync(new TransactWriteItemsResponse());
+        var (owner, group, reservation, order) = OwnerContext();
+
+        await _repository.SubmitOwnerAsync(owner, group, reservation, order);
+
+        Assert.Equal(4, saved!.TransactItems.Count);
+        Assert.Contains("#submitted = :true", saved.TransactItems[0].Update.UpdateExpression);
+        Assert.Contains("attribute_not_exists(#pref) OR #pref = :online", saved.TransactItems[0].Update.ConditionExpression);
+        Assert.Equal("1", saved.TransactItems[0].Update.ExpressionAttributeValues[":true"].N);
+        Assert.Equal("test-groups", saved.TransactItems[1].Update.TableName);
+        Assert.Equal("test-reservations", saved.TransactItems[2].ConditionCheck.TableName);
+        Assert.Contains("#ready = :true", saved.TransactItems[3].Update.UpdateExpression);
+        Assert.Contains("dishes = :dishes", saved.TransactItems[3].Update.ConditionExpression);
+        Assert.Contains("attribute_not_exists(#rev) OR #rev = :expected", saved.TransactItems[3].Update.ConditionExpression);
+        Assert.Contains("#rev = if_not_exists(#rev, :zero) + :one", saved.TransactItems[3].Update.UpdateExpression);
+        Assert.Contains("attribute_not_exists(#rev) OR #rev = :expected", saved.TransactItems[0].Update.ConditionExpression);
+        Assert.Equal("1", saved.TransactItems[3].Update.ExpressionAttributeValues[":true"].N);
+        _client.Verify(c => c.UpdateItemAsync(It.IsAny<UpdateItemRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task OwnerPreference_ConditionChecksDraftOrderWithoutChangingDishes()
+    {
+        TransactWriteItemsRequest? saved = null;
+        _client.Setup(c => c.TransactWriteItemsAsync(It.IsAny<TransactWriteItemsRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<TransactWriteItemsRequest, CancellationToken>((request, _) => saved = request)
+            .ReturnsAsync(new TransactWriteItemsResponse());
+        var (owner, group, reservation, order) = OwnerContext();
+
+        await _repository.SetOwnerPreferenceAsync(owner, group, reservation, order, "InRestaurant");
+
+        Assert.Equal(4, saved!.TransactItems.Count);
+        Assert.Equal("InRestaurant", saved.TransactItems[0].Update.ExpressionAttributeValues[":preference"].S);
+        Assert.DoesNotContain("dishes", saved.TransactItems[0].Update.UpdateExpression);
+        Assert.Contains("#ready = if_not_exists(#ready, :false)", saved.TransactItems[3].Update.UpdateExpression);
+        Assert.DoesNotContain("dishes", saved.TransactItems[3].Update.UpdateExpression);
+        Assert.Equal("0", saved.TransactItems[3].Update.ExpressionAttributeValues[":false"].N);
+    }
+
+    private static (GuestSession Owner, GroupReservation Group, Reservation Reservation, Order Order) OwnerContext() => (
+        new GuestSession { Id = "owner-group", GroupReservationId = "group", GuestName = "Owner", Dishes = [],
+            IsOwnerSession = true, OwnerUserId = "owner" },
+        new GroupReservation { GroupReservationId = "group", ReservationId = "reservation", ReservationToken = "token" },
+        new Reservation { Id = "reservation", CustomerId = "owner", WaiterId = "waiter", TableId = "table",
+            StartTime = new DateTime(2030, 1, 1, 12, 0, 0, DateTimeKind.Utc) },
+        new Order { OrderId = "order", CustomerId = "owner", ReservationId = "reservation", ReservationAddress = "address",
+            ReservationTime = "time", Dishes = [new OrderItem { DishId = "salad", Quantity = 1 }] });
+
     private Task Submit() => _repository.SubmitAsync(
         new Order { OrderId = "order", CustomerId = "owner", ReservationId = "reservation", ReservationAddress = "address", ReservationTime = "time", Dishes = [] },
         new GroupReservation { GroupReservationId = "group", ReservationId = "reservation", ReservationToken = "token" },

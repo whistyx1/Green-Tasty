@@ -164,6 +164,15 @@
   "/guest/sessions/{guestSessionId}/submit": {
     "POST": false
   },
+  "/guest/sessions/{guestSessionId}/ordering-preference": {
+    "PATCH": false
+  },
+  "/reservations/{reservationId}/group-ordering-preference": {
+    "PATCH": true
+  },
+  "/reservations/{reservationId}/group-owner-submit": {
+    "POST": true
+  },
   "/reservations/{reservationId}/invite-token": {
     "GET": true
   },

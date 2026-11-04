@@ -99,6 +99,42 @@ public class GroupPreOrderHandlerTests
         Assert.Equal(status, (await new SubmitGroupPreOrderHandler(_service.Object).HandleRequest(Request(), _context)).StatusCode);
     }
 
+    [Fact]
+    public async Task OwnerPreference_RequiresTrustedClaimsAndExpectedRevision()
+    {
+        var request = Request();
+        request.Body = "{\"preference\":\"InRestaurant\",\"expectedRevision\":2}";
+        request.RequestContext = new();
+        Assert.Equal(401, (await new SetOwnerPreferenceHandler(_service.Object).HandleRequest(request, _context)).StatusCode);
+        _service.VerifyNoOtherCalls();
+
+        request.RequestContext = Request().RequestContext;
+        request.Body = "{\"preference\":\"InRestaurant\"}";
+        Assert.Equal(400, (await new SetOwnerPreferenceHandler(_service.Object).HandleRequest(request, _context)).StatusCode);
+        _service.VerifyNoOtherCalls();
+
+        request.Body = "{\"preference\":\"InRestaurant\",\"expectedRevision\":2}";
+        _service.Setup(s => s.SetOwnerPreferenceAsync("owner", "reservation", "InRestaurant", 2))
+            .ReturnsAsync(new OwnerPreferenceState("InRestaurant", false, 3));
+        Assert.Equal(200, (await new SetOwnerPreferenceHandler(_service.Object).HandleRequest(request, _context)).StatusCode);
+        _service.Verify(s => s.SetOwnerPreferenceAsync("owner", "reservation", "InRestaurant", 2), Times.Once);
+    }
+
+    [Fact]
+    public async Task OwnerSubmission_RequiresExpectedOrderRevision()
+    {
+        var request = Request();
+        request.Body = "{}";
+        Assert.Equal(400, (await new SubmitOwnerPreOrderHandler(_service.Object).HandleRequest(request, _context)).StatusCode);
+        _service.VerifyNoOtherCalls();
+
+        request.Body = "{\"expectedOrderRevision\":4}";
+        _service.Setup(s => s.SubmitOwnerAsync("owner", "reservation", 4))
+            .ReturnsAsync(new OwnerPreferenceState("Online", true, 1));
+        Assert.Equal(200, (await new SubmitOwnerPreOrderHandler(_service.Object).HandleRequest(request, _context)).StatusCode);
+        _service.Verify(s => s.SubmitOwnerAsync("owner", "reservation", 4), Times.Once);
+    }
+
     private static APIGatewayProxyRequest Request() => new() {
         PathParameters = new Dictionary<string, string>() { ["reservationId"] = "reservation", ["groupReservationId"] = "group" },
         Body = "{\"reservationId\":\"reservation\"}",

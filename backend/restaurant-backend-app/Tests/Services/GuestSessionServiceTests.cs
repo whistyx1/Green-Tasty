@@ -39,6 +39,49 @@ public class GuestSessionServiceTests
             _mockUserRepository.Object,
             _mockTableRepository.Object);
     }
+
+    [Fact]
+    public async Task GetSession_LegacyPreferenceDefaultsToOnlineWithoutChangingStoredCart()
+    {
+        var session = new GuestSession { Id = "guest", GroupReservationId = "group", GuestName = "Guest", Dishes = [] };
+        _mockGuestSessionRepository.Setup(r => r.GetByGuestSessionId("guest")).ReturnsAsync(session);
+        _mockDishRepository.Setup(r => r.GetDishesByIdsAsync(It.IsAny<IEnumerable<string>>())).ReturnsAsync([]);
+
+        var result = await _guestSessionService.GetGuestSessionInfoAsync("guest");
+
+        Assert.Equal(OrderingPreference.Online, result.OrderingPreference);
+        Assert.Equal(0, result.Revision);
+        Assert.Null(session.OrderingPreference);
+    }
+
+    [Fact]
+    public async Task SetPreference_InRestaurantPreservesDraftAndRejectsStaleRevision()
+    {
+        var session = new GuestSession { Id = "guest", GroupReservationId = "group", GuestName = "Guest",
+            Dishes = [new OrderItem { DishId = "salad", Quantity = 2 }], Revision = 3 };
+        _mockGuestSessionRepository.Setup(r => r.GetByGuestSessionId("guest")).ReturnsAsync(session);
+        _mockGroupReservationRepository.Setup(r => r.GetGroupReservationByIdAsync("group"))
+            .ReturnsAsync(new GroupReservation { GroupReservationId = "group", ReservationId = "reservation", ReservationToken = "token" });
+
+        await Assert.ThrowsAsync<GroupPreOrderConflictException>(() =>
+            _guestSessionService.SetPreferenceAsync("guest", OrderingPreference.InRestaurant, 2));
+        Assert.Equal(2, session.Dishes[0].Quantity);
+        _mockGuestSessionRepository.Verify(r => r.SetPreferenceAsync(It.IsAny<GuestSession>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SubmitCart_InRestaurantDraftCannotBeSubmitted()
+    {
+        var session = new GuestSession { Id = "guest", GroupReservationId = "group", GuestName = "Guest",
+            OrderingPreference = OrderingPreference.InRestaurant, Dishes = [new OrderItem { DishId = "salad", Quantity = 2 }] };
+        _mockGuestSessionRepository.Setup(r => r.GetByGuestSessionId("guest")).ReturnsAsync(session);
+        _mockGroupReservationRepository.Setup(r => r.GetGroupReservationByIdAsync("group"))
+            .ReturnsAsync(new GroupReservation { GroupReservationId = "group", ReservationId = "reservation", ReservationToken = "token" });
+
+        await Assert.ThrowsAsync<ValidationException>(() => _guestSessionService.SubmitCartAsync("guest"));
+        _mockGuestSessionRepository.Verify(r => r.SaveAsync(It.IsAny<GuestSession>()), Times.Never);
+        Assert.Equal(2, session.Dishes[0].Quantity);
+    }
     [Theory]
     [InlineAutoData(0)]
     [InlineAutoData(3)]
@@ -115,6 +158,7 @@ public class GuestSessionServiceTests
     [AutoData]
     public async Task AddDishAsync_ShouldAddNewDish_WhenDishDoesNotExistInSession(GuestSession guestSession, GroupReservation groupReservation, Reservation parentReservation, Table table, Dish dish)
     {
+        guestSession.OrderingPreference = null;
         guestSession.Dishes = [];
         guestSession.GroupReservationId = groupReservation.GroupReservationId;
         groupReservation.Status = GroupReservationStatus.Open;
@@ -144,6 +188,7 @@ public class GuestSessionServiceTests
     [AutoData]
     public async Task AddDishAsync_ShouldIncreaseQuantity_WhenDishAlreadyExists(GuestSession guestSession, GroupReservation groupReservation, Reservation parentReservation, Table table, Dish dish)
     {
+        guestSession.OrderingPreference = null;
         int initialQuantity = 3;
         int quantityToAdd = 2;
         guestSession.Dishes = [new OrderItem { DishId = dish.Id, Quantity = initialQuantity, State = OrderItemState.Pending }];
@@ -205,6 +250,7 @@ public class GuestSessionServiceTests
     [AutoData]
     public async Task AddDishAsync_ShouldThrowDishNotFound_WhenDishNotFound(GuestSession guestSession, GroupReservation groupReservation, Reservation parentReservation, Table table, string dishId)
     {
+        guestSession.OrderingPreference = null;
         guestSession.GroupReservationId = groupReservation.GroupReservationId;
         groupReservation.Status = GroupReservationStatus.Open;
         groupReservation.ReservationId = parentReservation.Id;
@@ -225,6 +271,7 @@ public class GuestSessionServiceTests
     [AutoData]
     public async Task AddDishAsync_ShouldThrowDishNotAvailable_WhenDishIsNotAvailable(GuestSession guestSession, GroupReservation groupReservation, Reservation parentReservation, Table table, Dish dish)
     {
+        guestSession.OrderingPreference = null;
         dish.State = DishState.OutOfStock;
         guestSession.GroupReservationId = groupReservation.GroupReservationId;
         groupReservation.Status = GroupReservationStatus.Open;
@@ -270,6 +317,7 @@ public class GuestSessionServiceTests
     [AutoData]
     public async Task RemoveDishAsync_ShouldDecreaseQuantity_WhenQuantityIsGreaterThanAmountToRemove(GuestSession guestSession, GroupReservation groupReservation, string dishId)
     {
+        guestSession.OrderingPreference = null;
         int initialQuantity = 5;
         int quantityToRemove = 2;
         guestSession.Dishes =
@@ -300,6 +348,7 @@ public class GuestSessionServiceTests
     [AutoData]
     public async Task RemoveDishAsync_ShouldRemoveDishFromList_WhenQuantityToRemoveIsEqualOrGreater(GuestSession guestSession, GroupReservation groupReservation, string dishId)
     {
+        guestSession.OrderingPreference = null;
         int initialQuantity = 2;
         int quantityToRemove = 3;
         guestSession.Dishes =
@@ -327,6 +376,7 @@ public class GuestSessionServiceTests
     [AutoData]
     public async Task RemoveDishAsync_ShouldThrowDishNotFoundException_WhenDishDoesNotExistInSession(GuestSession guestSession, GroupReservation groupReservation, string dishId)
     {
+        guestSession.OrderingPreference = null;
         guestSession.Dishes = [];
         guestSession.GroupReservationId = groupReservation.GroupReservationId;
         groupReservation.Status = GroupReservationStatus.Open;
@@ -475,6 +525,7 @@ public class GuestSessionServiceTests
     [AutoData]
     public async Task SubmitCartAsync_Valid_SubmitsSuccessfuilly(GuestSession guestSession, GroupReservation groupReservation, Dish[] dishes)
     {
+        guestSession.OrderingPreference = null;
         foreach (var dish in dishes)
             dish.State = DishState.Available;
 
@@ -538,6 +589,7 @@ public class GuestSessionServiceTests
     [AutoData]
     public async Task SubmitCartAsync_GuestSessionHasNoDishes_ThrowsCartIsEmptyException(GuestSession guestSession, GroupReservation groupReservation)
     {
+        guestSession.OrderingPreference = null;
         guestSession.Dishes = [];
         guestSession.GroupReservationId = groupReservation.GroupReservationId;
         groupReservation.Status = GroupReservationStatus.Open;
@@ -577,6 +629,7 @@ public class GuestSessionServiceTests
     [InlineAutoData(DishState.OnStop)]
     public async Task SubmitCartAsync_DishNotAvailable_ThrowsDishNotAvailable(DishState state, Dish dish, GuestSession guestSession, GroupReservation groupReservation)
     {
+        guestSession.OrderingPreference = null;
         dish.State = state;
         guestSession.IsSubmitted = false;
         guestSession.GroupReservationId = groupReservation.GroupReservationId;

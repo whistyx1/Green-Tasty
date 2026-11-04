@@ -17,6 +17,7 @@ import { ParticipantCardComponent } from '@app/components/group-orders/participa
 import { SubmittedDish } from '@app/models/group-orders/submit-group-pre-order.model';
 import { GroupStatusResponse } from '@app/models/group-orders/group-status.model';
 import { Participant } from '@app/models/group-orders/participant.model';
+import { OrderingPreference } from '@app/models/group-orders/participant.model';
 import { GroupSessionsResponse } from '@app/models/group-orders/group-sessions-response.model';
 import { OwnerOrderProjection } from '@app/models/group-orders/owner-order-projection.model';
 import { GuestInvite } from '@app/models/reservations/guest-invite.model';
@@ -48,6 +49,12 @@ export class GroupOrderPageComponent implements OnInit {
   readonly invite = signal<GuestInvite | null>(null);
   private readonly rawParticipants = signal<Participant[]>([]);
   readonly ownerPreOrder = signal<OwnerOrderProjection | null>(null);
+  readonly ownerBusy = signal(false);
+  readonly ownerError = signal('');
+  readonly ownerConfirmationOpen = signal(false);
+  readonly owner = computed(() => this.rawParticipants().find(person => person.type === 'Owner' && person.id === this.ownerSessionId()));
+  readonly ownerConfirmationItems = signal<SubmissionItem[]>([]);
+  readonly ownerConfirmationRevision = signal(0);
   readonly submittedOrder = signal<OwnerOrderProjection | null>(null);
   readonly participants = computed(() => {
     const people = this.rawParticipants();
@@ -73,8 +80,8 @@ export class GroupOrderPageComponent implements OnInit {
         ? person
         : {
             ...person,
-            items: [...person.items, ...ownOrder.items],
-            total: person.total + ownOrder.total,
+            items: ownOrder.items,
+            total: ownOrder.total,
           }
     );
   });
@@ -97,9 +104,10 @@ export class GroupOrderPageComponent implements OnInit {
     const finalOrder = this.submittedOrder();
     if (finalOrder) return finalOrder;
     const ownOrder = this.ownerPreOrder();
-    const included = ownOrder
+    const owner = this.owner();
+    const included = ownOrder && owner?.isSubmitted && owner.orderingPreference !== 'InRestaurant'
       ? [
-          ...this.rawParticipants(),
+          ...this.rawParticipants().filter(person => person.type !== 'Owner'),
           {
             id: 'ordinary-owner-order',
             name: 'Saved owner preorder',
@@ -107,7 +115,7 @@ export class GroupOrderPageComponent implements OnInit {
             items: ownOrder.items,
           },
         ]
-      : this.rawParticipants();
+      : this.rawParticipants().filter(person => person.type !== 'Owner');
     return consolidatePreOrder(included);
   });
   readonly confirmationItems = computed<SubmissionItem[]>(() =>
@@ -136,15 +144,8 @@ export class GroupOrderPageComponent implements OnInit {
   );
   readonly pendingCount = computed(
     () =>
-      this.rawParticipants().filter(
-        (person) =>
-          !person.isSubmitted &&
-          !(
-            this.ownerPreOrder() &&
-            person.id === this.ownerSessionId() &&
-            person.items.length === 0
-          )
-      ).length
+      this.rawParticipants().filter(person =>
+        person.orderingPreference !== 'InRestaurant' && !person.isSubmitted).length
   );
   readonly pendingMessage = computed(() => {
     const count = this.pendingCount();
@@ -166,9 +167,7 @@ export class GroupOrderPageComponent implements OnInit {
       !this.removing() &&
       this.status() === 'Open' &&
       this.consolidated().items.length > 0 &&
-      this.ownerPreOrder()?.editable !== false &&
-      (!this.ownerPreOrder() ||
-        this.rawParticipants().some((person) => person.isSubmitted && person.items.length > 0))
+      this.ownerPreOrder()?.editable !== false
   );
 
   ngOnInit(): void {
@@ -296,6 +295,48 @@ export class GroupOrderPageComponent implements OnInit {
     this.ownerPreOrder.set(snapshot.ownerPreOrder ?? null);
     this.submittedOrder.set(snapshot.submittedOrder ?? null);
     this.submittedSummaryIncomplete.set(snapshot.finalSummaryPending ?? false);
+  }
+
+  setOwnerPreference(preference: OrderingPreference): void {
+    const owner = this.owner();
+    if (!owner || this.ownerBusy() || this.submitting() || this.status() !== 'Open' || owner.isSubmitted ||
+        (owner.orderingPreference ?? 'Online') === preference) return;
+    this.ownerBusy.set(true);
+    this.ownerError.set('');
+    this.service.setOwnerPreference$(this.reservationId, preference, owner.revision ?? 0)
+      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.ownerBusy.set(false)))
+      .subscribe({
+        next: () => this.refresh(),
+        error: () => { this.ownerError.set('Preference could not be saved. Reload the group and try again.'); this.refresh(); },
+      });
+  }
+
+  openOwnerConfirmation(): void {
+    if (!this.owner() || this.owner()?.isSubmitted || this.owner()?.orderingPreference === 'InRestaurant' ||
+        !this.ownerPreOrder()?.items.length || this.ownerBusy() || this.submitting() || this.status() !== 'Open') return;
+    this.ownerError.set('');
+    this.ownerConfirmationItems.set(this.ownerPreOrder()!.items.map(item => ({
+      name: item.dish.name, quantity: item.quantity, unitPrice: item.dish.price,
+    })));
+    this.ownerConfirmationRevision.set(this.ownerPreOrder()?.revision ?? 0);
+    this.ownerConfirmationOpen.set(true);
+  }
+
+  closeOwnerConfirmation(): void {
+    if (!this.ownerBusy()) this.ownerConfirmationOpen.set(false);
+  }
+
+  confirmOwnerSubmission(): void {
+    if (!this.ownerConfirmationOpen() || this.ownerBusy() || this.owner()?.isSubmitted ||
+        this.owner()?.orderingPreference === 'InRestaurant' || !this.ownerPreOrder()?.items.length) return;
+    this.ownerBusy.set(true);
+    this.ownerError.set('');
+    this.service.submitOwner$(this.reservationId, this.ownerConfirmationRevision())
+      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.ownerBusy.set(false)))
+      .subscribe({
+        next: () => { this.ownerConfirmationOpen.set(false); this.refresh(); },
+        error: () => { this.ownerConfirmationOpen.set(false); this.ownerError.set('Your pre-order changed. Reload and try again.'); this.refresh(); },
+      });
   }
 
   private startPolling(): void {

@@ -108,6 +108,7 @@ public class OrderServiceTests
     [AutoData]
     public async Task ConfirmPreOrderDishAsync_ShouldNotSubmitOrder_IfPendingDishesRemain(Reservation reservation, Order order)
     {
+        order.OwnerGroupReady = false;
         var callerId = "waiter-1";
         var reservationId = "res-1";
         var dishId = "dish-1";
@@ -146,6 +147,7 @@ public class OrderServiceTests
     [AutoData]
     public async Task ConfirmPreOrderDishAsync_ShouldThrowDishNotFoundException_WhenDishNotFound(Reservation reservation, Order order)
     {
+        order.OwnerGroupReady = false;
         var callerId = "waiter-1";
         var reservationId = reservation.Id;
         reservation.WaiterId = callerId;
@@ -192,6 +194,7 @@ public class OrderServiceTests
     [AutoData]
     public async Task CancelPreOrderDishAsync_ShouldNotSubmitOrder_IfPendingDishesRemain(Reservation reservation, Order order)
     {
+        order.OwnerGroupReady = false;
         var callerId = "waiter-1";
         var reservationId = reservation.Id;
         var dishId = "dish-1";
@@ -218,6 +221,7 @@ public class OrderServiceTests
     [AutoData]
     public async Task CancelPreOrderDishAsync_ShouldThrowDishNotFoundException_WhenDishNotFound(Reservation reservation, Order order)
     {
+        order.OwnerGroupReady = false;
         var callerId = "waiter-1";
         var reservationId = reservation.Id;
         reservation.WaiterId = callerId;
@@ -373,6 +377,7 @@ public class OrderServiceTests
     [AutoData]
     public async Task EditPreOrderAsync_ShouldUpdateDishes_WhenValid(Reservation reservation, Order order, Dish availableDish)
     {
+        order.OwnerGroupReady = false;
         var customerId = "cust-1";
         var reservationId = reservation.Id;
         var newDishes = new List<OrderItem> { new OrderItem { DishId = availableDish.Id, Quantity = 2 } };
@@ -445,6 +450,7 @@ public class OrderServiceTests
     [AutoData]
     public async Task EditPreOrderForWaiterAsync_ShouldUpdateDishes_WhenValid(Reservation reservation, Order order, Dish availableDish)
     {
+        order.OwnerGroupReady = false;
         var waiterId = "waiter-1";
         var reservationId = reservation.Id;
         var newDishes = new List<OrderItem> { new OrderItem { DishId = availableDish.Id, Quantity = 1 } };
@@ -492,6 +498,7 @@ public class OrderServiceTests
     [AutoData]
     public async Task CancelPreOrderAsync_ShouldCancelOrder_WhenValid(Reservation reservation, Order order)
     {
+        order.OwnerGroupReady = false;
         var customerId = "cust-1";
         var reservationId = reservation.Id;
         reservation.CustomerId = customerId;
@@ -545,6 +552,8 @@ public class OrderServiceTests
         order.CustomerId = customerId;
         order.ReservationId = reservationId;
         order.Status = OrderStatus.Created;
+        order.OwnerGroupReady = false;
+        order.GroupFinalized = false;
 
         _mockReservationRepository.Setup(r => r.GetReservationByIdAsync(reservationId)).ReturnsAsync(reservation);
         _mockOrderRepository.Setup(r => r.GetOrderByReservationIdAsync(reservationId)).ReturnsAsync(order);
@@ -624,6 +633,42 @@ public class OrderServiceTests
         await Assert.ThrowsAsync<ActionForbiddenException>(() =>
             _orderService.SubmitPreOrderAsync("owner", reservation.Id, _mockLambdaContext.Object));
         _mockOrderRepository.Verify(r => r.SubmitOrderIfEligibleAsync(It.IsAny<Order>(), It.IsAny<Reservation>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SubmitPreOrderAsync_RejectsReadyOwnerOrderEvenIfGroupLookupIsStale()
+    {
+        var (reservation, order) = SetupValidSubmission();
+        order.OwnerGroupReady = true;
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            _orderService.SubmitPreOrderAsync("owner", reservation.Id, _mockLambdaContext.Object));
+
+        _mockOrderRepository.Verify(r => r.SubmitOrderIfEligibleAsync(It.IsAny<Order>(), It.IsAny<Reservation>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("edit")]
+    [InlineData("cancel")]
+    [InlineData("unsubmit")]
+    public async Task ReadyOwnerOrder_RejectsOrdinaryCustomerMutations(string action)
+    {
+        var (reservation, order) = SetupValidSubmission();
+        order.OwnerGroupReady = true;
+        if (action == "unsubmit") order.Status = OrderStatus.SubmittedByCustomer;
+        _mockDishService.Setup(service => service.GetDishByIdAsync("dish"))
+            .ReturnsAsync(new Dish { Id = "dish", State = DishState.Available });
+
+        Task mutate = action switch {
+            "edit" => _orderService.EditPreOrderAsync("owner", reservation.Id,
+                [new OrderItem { DishId = "dish", Quantity = 2 }], _mockLambdaContext.Object),
+            "cancel" => _orderService.CancelPreOrderAsync("owner", reservation.Id, _mockLambdaContext.Object),
+            _ => _orderService.UnSubmitPreOrderAsync("owner", reservation.Id, _mockLambdaContext.Object)
+        };
+
+        await Assert.ThrowsAsync<ValidationException>(() => mutate);
+        _mockOrderRepository.Verify(repository => repository.SaveOrderIfUnchangedAsync(
+            It.IsAny<Order>(), It.IsAny<Order>(), It.IsAny<bool>()), Times.Never);
     }
 
     [Theory]
@@ -717,6 +762,7 @@ public class OrderServiceTests
     [AutoData]
     public async Task UnSubmitPreOrderAsync_ShouldRevertOrderStatus_WhenValid(Reservation reservation, Order order)
     {
+        order.OwnerGroupReady = false;
         var customerId = "cust-1";
         var reservationId = reservation.Id;
         reservation.CustomerId = customerId;

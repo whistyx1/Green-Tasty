@@ -28,6 +28,32 @@ public class SubmitGroupPreOrderHandler(IGroupPreOrderService service) : IApiReq
         });
 }
 
+public class SetOwnerPreferenceHandler(IGroupPreOrderService service) : IApiRequestHandler
+{
+    private record RequestBody(string Preference, long? ExpectedRevision);
+    public Task<APIGatewayProxyResponse> HandleRequest(APIGatewayProxyRequest request, ILambdaContext context)
+        => GroupPreOrderHandler.HandleAsync(request, context, "reservationId", async (userId, reservationId) => {
+            RequestBody? body;
+            try { body = JsonSerializer.Deserialize<RequestBody>(request.Body ?? "", new JsonSerializerOptions { PropertyNameCaseInsensitive = true }); }
+            catch (JsonException) { throw new ValidationException("Invalid request body."); }
+            if (body?.ExpectedRevision is null or < 0) throw new ValidationException("Preference and expected revision are required.");
+            return await service.SetOwnerPreferenceAsync(userId, reservationId, body.Preference, body.ExpectedRevision.Value);
+        });
+}
+
+public class SubmitOwnerPreOrderHandler(IGroupPreOrderService service) : IApiRequestHandler
+{
+    private record RequestBody(long? ExpectedOrderRevision);
+    public Task<APIGatewayProxyResponse> HandleRequest(APIGatewayProxyRequest request, ILambdaContext context)
+        => GroupPreOrderHandler.HandleAsync(request, context, "reservationId", async (userId, reservationId) => {
+            RequestBody? body;
+            try { body = JsonSerializer.Deserialize<RequestBody>(request.Body ?? "", new JsonSerializerOptions { PropertyNameCaseInsensitive = true }); }
+            catch (JsonException) { throw new ValidationException("Invalid request body."); }
+            if (body?.ExpectedOrderRevision is null or < 0) throw new ValidationException("Expected order revision is required.");
+            return await service.SubmitOwnerAsync(userId, reservationId, body.ExpectedOrderRevision.Value);
+        });
+}
+
 internal static class GroupPreOrderHandler
 {
     public static async Task<APIGatewayProxyResponse> HandleAsync(APIGatewayProxyRequest request, ILambdaContext context,

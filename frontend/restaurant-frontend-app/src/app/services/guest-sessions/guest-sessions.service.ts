@@ -29,6 +29,15 @@ export interface GuestMenuDish {
 }
 
 export type GuestMenuCategoryKey = string;
+export type OrderingPreference = 'Online' | 'InRestaurant';
+export interface GuestSessionResponse {
+    name: string;
+    items: { dish: GuestMenuDish; quantity: number }[];
+    total: number;
+    isSubmitted: boolean;
+    orderingPreference?: OrderingPreference;
+    revision?: number;
+}
 
 export interface GuestMenuResponse {
     dishes: Record<GuestMenuCategoryKey, GuestMenuDish[]>;
@@ -51,9 +60,16 @@ export class GuestSessionsService {
     }
 
     getSession(guestSessionId: string, sessionToken: string) {
-        return this.http.get<unknown>(
+        return this.http.get<GuestSessionResponse>(
             `${this.baseUrl}/guest/sessions/${guestSessionId}`,
             { headers: this.authHeaders(sessionToken) }
+        );
+    }
+
+    setPreference(guestSessionId: string, sessionToken: string, preference: OrderingPreference, expectedRevision: number) {
+        return this.http.patch<GuestSessionResponse>(
+            `${this.baseUrl}/guest/sessions/${guestSessionId}/ordering-preference`,
+            { preference, expectedRevision }, { headers: this.authHeaders(sessionToken) }
         );
     }
 

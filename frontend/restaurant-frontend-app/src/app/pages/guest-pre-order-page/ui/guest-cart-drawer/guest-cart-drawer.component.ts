@@ -15,6 +15,7 @@ export class GuestCartDrawerComponent {
     readonly items = input<GuestCartItem[]>([]);
     readonly total = input(0);
     readonly busy = input(false);
+    readonly online = input(true);
     readonly error = input<string | null>(null);
 
     readonly closed = output<void>();

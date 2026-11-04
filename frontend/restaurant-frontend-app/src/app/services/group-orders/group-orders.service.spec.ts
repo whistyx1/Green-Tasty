@@ -62,4 +62,20 @@ describe('Рівень 2 · GroupOrdersService', () => {
     expect(req.request.body).toEqual({ reservationId: 'res-1' });
     req.flush([]);
   });
+
+  it('sets only the authenticated owner preference with the displayed revision', () => {
+    service.setOwnerPreference$('res-1', 'InRestaurant', 4).subscribe();
+    const req = http.expectOne(`${BASE_URL}/reservations/res-1/group-ordering-preference`);
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ preference: 'InRestaurant', expectedRevision: 4 });
+    req.flush({ orderingPreference: 'InRestaurant', isSubmitted: false, revision: 5 });
+  });
+
+  it('submits the owner draft with the revision shown in confirmation', () => {
+    service.submitOwner$('res-1', 7).subscribe();
+    const req = http.expectOne(`${BASE_URL}/reservations/res-1/group-owner-submit`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ expectedOrderRevision: 7 });
+    req.flush({ orderingPreference: 'Online', isSubmitted: true, revision: 3 });
+  });
 });

@@ -15,11 +15,12 @@ const tomYum = { id: 'dish2', name: 'Tom Yum', price: 220 };
 
 const SESSIONS: GroupSessionsResponse = {
   participants: [
-    { id: 'owner', type: 'Owner', name: 'Yevhenii', isSubmitted: true, total: 180, items: [{ dish: caesar, quantity: 1 }] },
+    { id: 'owner', type: 'Owner', name: 'Yevhenii', isSubmitted: true, total: 0, items: [] },
     { id: 'andrii', type: 'Guest', name: 'Andrii', isSubmitted: true, total: 360, items: [{ dish: caesar, quantity: 2 }] },
     { id: 'olena', type: 'Guest', name: 'Olena', isSubmitted: false, total: 220, items: [{ dish: tomYum, quantity: 1 }] },
   ],
   total: 760,
+  ownerPreOrder: { items: [{ dish: caesar, quantity: 1 }], total: 180, editable: true },
 };
 const INVITE = {
   GroupReservationId: 'grp-1',
@@ -99,6 +100,7 @@ describe('Рівень 2 · сторінка Owner Review', () => {
     it('порожньо: «Participants haven’t added any dishes yet»', () => {
       const empty = structuredClone(SESSIONS);
       empty.participants.forEach((p) => (p.items = []));
+      empty.ownerPreOrder = undefined;
       service.getSessions$.and.returnValue(of(empty));
       expect(create().element.textContent).toMatch(/Participants haven.t added any dishes yet/);
     });

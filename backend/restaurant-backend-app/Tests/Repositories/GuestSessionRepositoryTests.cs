@@ -4,6 +4,7 @@ using Amazon.DynamoDBv2.DocumentModel;
 using Amazon.DynamoDBv2.Model;
 using APIHandler.Entities;
 using APIHandler.Exceptions;
+using APIHandler.Models.GuestSessions;
 using APIHandler.Repositories.GuestSessions;
 using Moq;
 
@@ -13,12 +14,14 @@ namespace APIHandler.Tests.Repositories;
 public class GuestSessionRepositoryTests : IDisposable
 {
     private readonly string? _originalTable = Environment.GetEnvironmentVariable("guestSessionTable");
+    private readonly string? _originalGroupTable = Environment.GetEnvironmentVariable("groupReservationsTable");
     private readonly Mock<IAmazonDynamoDB> _client = new();
     private readonly IDynamoDBContext _serializer;
 
     public GuestSessionRepositoryTests()
     {
         Environment.SetEnvironmentVariable("guestSessionTable", "test-sessions");
+        Environment.SetEnvironmentVariable("groupReservationsTable", "test-groups");
         _serializer = new DynamoDBContextBuilder().WithDynamoDBClient(() => _client.Object)
             .ConfigureContext(config => config.DisableFetchingTableMetadata = true).Build();
     }
@@ -26,6 +29,7 @@ public class GuestSessionRepositoryTests : IDisposable
     public void Dispose()
     {
         Environment.SetEnvironmentVariable("guestSessionTable", _originalTable);
+        Environment.SetEnvironmentVariable("groupReservationsTable", _originalGroupTable);
         _serializer.Dispose();
     }
 
@@ -92,30 +96,61 @@ public class GuestSessionRepositoryTests : IDisposable
     }
 
     [Fact]
-    public async Task Save_UsesConditionalUpdateSoDeletedSessionCannotBeRecreated()
+    public async Task Save_UsesRevisionAndOpenGroupTransaction()
     {
         var guest = Session("guest");
         guest.Dishes = [new OrderItem { DishId = "salad", Quantity = 2 }];
         var context = new Mock<IDynamoDBContext>();
         context.Setup(value => value.ToDocument(guest, It.IsAny<ToDocumentConfig>()))
             .Returns(_serializer.ToDocument(guest, new ToDocumentConfig { OverrideTableName = "test-sessions" }));
-        UpdateItemRequest? captured = null;
-        _client.Setup(value => value.UpdateItemAsync(It.IsAny<UpdateItemRequest>(), It.IsAny<CancellationToken>()))
-            .Callback<UpdateItemRequest, CancellationToken>((request, _) => captured = request)
-            .ThrowsAsync(new ConditionalCheckFailedException("deleted"));
+        TransactWriteItemsRequest? captured = null;
+        _client.Setup(value => value.TransactWriteItemsAsync(It.IsAny<TransactWriteItemsRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<TransactWriteItemsRequest, CancellationToken>((request, _) => captured = request)
+            .ReturnsAsync(new TransactWriteItemsResponse());
         var repository = new GuestSessionRepository(context.Object, _client.Object);
 
-        await Assert.ThrowsAsync<GuestSessionNotFoundException>(() => repository.SaveAsync(guest));
+        await repository.SaveAsync(guest);
 
         Assert.NotNull(captured);
-        Assert.Equal("test-sessions", captured.TableName);
-        Assert.Equal("attribute_exists(#id) AND #group = :group", captured.ConditionExpression);
-        Assert.Equal("SET #dishes = :dishes, #submitted = :submitted", captured.UpdateExpression);
-        Assert.Equal("guest", captured.Key["guestSessionId"].S);
-        Assert.Equal("group", captured.ExpressionAttributeValues[":group"].S);
-        Assert.Equal("salad", captured.ExpressionAttributeValues[":dishes"].L[0].M["dishId"].S);
-        Assert.Equal("2", captured.ExpressionAttributeValues[":dishes"].L[0].M["quantity"].N);
+        Assert.Equal(2, captured.TransactItems.Count);
+        var update = captured.TransactItems[0].Update;
+        Assert.Equal("test-sessions", update.TableName);
+        Assert.Contains("attribute_exists(#id)", update.ConditionExpression);
+        Assert.Contains("attribute_not_exists(#rev)", update.ConditionExpression);
+        Assert.Contains("attribute_not_exists(#submitted)", update.ConditionExpression);
+        Assert.Contains("#rev = if_not_exists(#rev, :zero) + :one", update.UpdateExpression);
+        Assert.Equal("guest", update.Key["guestSessionId"].S);
+        Assert.Equal("group", update.ExpressionAttributeValues[":group"].S);
+        Assert.Equal("salad", update.ExpressionAttributeValues[":dishes"].L[0].M["dishId"].S);
+        Assert.Equal("2", update.ExpressionAttributeValues[":dishes"].L[0].M["quantity"].N);
+        Assert.Equal("0", captured.TransactItems[1].Update.ExpressionAttributeValues[":open"].N);
         context.Verify(value => value.SaveAsync(It.IsAny<GuestSession>(), It.IsAny<SaveConfig>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SetPreference_PreservesDraftAndUsesLegacyRevisionCondition()
+    {
+        var guest = Session("guest");
+        guest.Dishes = [new OrderItem { DishId = "salad", Quantity = 2 }];
+        var context = new Mock<IDynamoDBContext>();
+        context.Setup(value => value.ToDocument(guest, It.IsAny<ToDocumentConfig>()))
+            .Returns(_serializer.ToDocument(guest, new ToDocumentConfig { OverrideTableName = "test-sessions" }));
+        TransactWriteItemsRequest? captured = null;
+        _client.Setup(value => value.TransactWriteItemsAsync(It.IsAny<TransactWriteItemsRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<TransactWriteItemsRequest, CancellationToken>((request, _) => captured = request)
+            .ReturnsAsync(new TransactWriteItemsResponse());
+
+        await new GuestSessionRepository(context.Object, _client.Object).SetPreferenceAsync(guest, OrderingPreference.InRestaurant);
+
+        Assert.Equal(2, guest.Dishes[0].Quantity);
+        Assert.Null(guest.OrderingPreference);
+        var update = captured!.TransactItems[0].Update;
+        Assert.Contains("attribute_not_exists(#rev)", update.ConditionExpression);
+        Assert.Contains("attribute_not_exists(#submitted)", update.ConditionExpression);
+        Assert.DoesNotContain("#dishes =", update.UpdateExpression);
+        Assert.Equal(OrderingPreference.InRestaurant, update.ExpressionAttributeValues[":preference"].S);
+        Assert.Equal("0", update.ExpressionAttributeValues[":false"].N);
+        Assert.Equal("test-groups", captured.TransactItems[1].Update.TableName);
     }
 
     private static GuestSession Session(string id) => new()

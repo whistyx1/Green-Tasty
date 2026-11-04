@@ -52,6 +52,6 @@
   }
 
   <p class="subtotal">
-    <span>Subtotal</span><span>{{ participant().total | currency }}</span>
+    <span>{{ participant().orderingPreference === 'InRestaurant' ? 'Saved draft subtotal' : 'Subtotal' }}</span><span>{{ participant().total | currency }}</span>
   </p>
 </article>

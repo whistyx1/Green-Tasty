@@ -47,4 +47,11 @@ describe('consolidatePreOrder', () => {
     const result = consolidatePreOrder([guest('Andrii', true, []), guest('Olena', true, [{ dish: tomYum, quantity: 1 }])]);
     expect(result).toEqual({ items: [{ dish: tomYum, quantity: 1 }], total: 220 });
   });
+
+  it('excludes an In Restaurant preserved draft even if stale data says submitted', () => {
+    const inRestaurant = { ...guest('Guest', true, [{ dish: caesar, quantity: 2 }]), orderingPreference: 'InRestaurant' as const };
+    const result = consolidatePreOrder([inRestaurant, guest('Online', true, [{ dish: tomYum, quantity: 1 }])]);
+    expect(result).toEqual({ items: [{ dish: tomYum, quantity: 1 }], total: 220 });
+    expect(inRestaurant.items[0].quantity).toBe(2);
+  });
 });

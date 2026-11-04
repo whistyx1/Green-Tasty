@@ -27,11 +27,11 @@
                                 <div class="sub">Expected ready time - 10 minutes</div>
 
                                 <div class="qty">
-                                    <button type="button" class="qty-btn" [disabled]="busy()" (click)="dec.emit(it.dishId)" aria-label="Decrease quantity">
+                                    <button type="button" class="qty-btn" [disabled]="busy() || !online()" (click)="dec.emit(it.dishId)" aria-label="Decrease quantity">
                                         -
                                     </button>
                                     <span class="qty-value">{{ it.qty }}</span>
-                                    <button type="button" class="qty-btn" [disabled]="busy()" (click)="inc.emit(it.dishId)" aria-label="Increase quantity">
+                                    <button type="button" class="qty-btn" [disabled]="busy() || !online()" (click)="inc.emit(it.dishId)" aria-label="Increase quantity">
                                         +
                                     </button>
                                 </div>
@@ -41,7 +41,7 @@
                                 <button 
                                     type="button"
                                     class="trash"
-                                    [disabled]="busy()"
+                                    [disabled]="busy() || !online()"
                                     (click)="remove.emit(it.dishId)"
                                     aria-label="Remove item"
                                 >
@@ -58,15 +58,16 @@
                     @if (error()) {
                         <p class="cart-error" role="alert">{{ error() }}</p>
                     }
+                    @if (!online()) { <p role="status">Draft saved for later. Switch to Online to submit.</p> }
                     <div class="total">
-                        <span class="total-label">Grand Total</span>
+                        <span class="total-label">{{ online() ? 'Grand Total' : 'Saved draft total' }}</span>
                         <span class="total-value">{{ total() | currency: '$' }}</span>
                     </div>
 
                     <button
                         type="button"
                         class="submit"
-                        [disabled]="items().length === 0 || busy()"
+                        [disabled]="items().length === 0 || busy() || !online()"
                         (click)="submitted.emit()"
                     >
                     {{ busy() ? 'Please wait...' : 'Submit Pre-Order' }}

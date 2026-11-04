@@ -20,5 +20,7 @@ public interface IGuestSessionRepository
 
     Task SaveAsync(GuestSession guestSession);
 
+    Task SetPreferenceAsync(GuestSession guestSession, string preference);
+
     Task DeleteAsync(GuestSession session);
 }

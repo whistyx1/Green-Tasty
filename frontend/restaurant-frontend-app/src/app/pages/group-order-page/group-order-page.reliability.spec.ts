@@ -15,8 +15,8 @@ const data: GroupSessionsResponse = {
       type: 'Owner',
       name: 'Owner',
       isSubmitted: true,
-      items: [{ dish, quantity: 1 }],
-      total: 8,
+      items: [],
+      total: 0,
     },
     {
       id: 'guest',
@@ -28,6 +28,7 @@ const data: GroupSessionsResponse = {
     },
   ],
   total: 16,
+  ownerPreOrder: { items: [{ dish, quantity: 1 }], total: 8, editable: true },
 };
 const invite = {
   GroupReservationId: 'group',
@@ -144,7 +145,7 @@ describe('Group order synchronization and mutation reliability', () => {
     fixture.destroy();
   }));
 
-  it('ordinary Owner preorder is included once without relabeling raw session submission', () => {
+  it('ordinary Owner preorder remains pending until the owner submits it', () => {
     const response = structuredClone(data);
     response.participants[0] = {
       ...response.participants[0],
@@ -157,7 +158,7 @@ describe('Group order synchronization and mutation reliability', () => {
     response.groupStatus = { currentParticipants: 2, maxCapacity: 4, status: 'Open' };
     service.getSessions$.and.returnValue(of(response));
     const fixture = create();
-    expect(fixture.componentInstance.consolidated().total).toBe(16);
+    expect(fixture.componentInstance.consolidated().total).toBe(8);
     expect(fixture.componentInstance.participants()[0].isSubmitted).toBeFalse();
     expect(fixture.nativeElement.textContent).toContain('Saved pre-order');
     expect(service.getStatus$).not.toHaveBeenCalled();

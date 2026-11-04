@@ -5,7 +5,7 @@ import { OwnerOrderProjection } from './owner-order-projection.model';
 /** GET /guest/groups/{groupReservationId}/sessions */
 export interface GroupSessionsResponse {
   participants: Participant[];
-  /** Сума ВСІХ учасників, включно з тими, хто ще не підтвердив кошик. */
+  /** Active online draft total; In Restaurant drafts remain on their sessions. */
   total: number;
   /** Ordinary Owner preorder before group submission; raw participants stay unchanged. */
   ownerPreOrder?: OwnerOrderProjection;

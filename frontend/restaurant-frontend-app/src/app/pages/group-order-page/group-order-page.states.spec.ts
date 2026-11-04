@@ -26,11 +26,12 @@ const SESSIONS: GroupSessionsResponse = {
       type: 'Owner',
       name: 'Owner',
       isSubmitted: true,
-      total: 8,
-      items: [{ dish: { id: 'salad', name: 'Salad', price: 8 }, quantity: 1 }],
+      total: 0,
+      items: [],
     },
   ],
   total: 8,
+  ownerPreOrder: { items: [{ dish: { id: 'salad', name: 'Salad', price: 8 }, quantity: 1 }], total: 8, editable: true },
 };
 
 function button(root: ParentNode, text: string): HTMLButtonElement | undefined {
@@ -50,6 +51,8 @@ describe('Group order page state and lifecycle', () => {
       'getSessions$',
       'getStatus$',
       'submit$',
+      'setOwnerPreference$',
+      'submitOwner$',
     ]);
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
     service.getGroupInvite$.and.returnValue(of(INVITE));
@@ -78,6 +81,42 @@ describe('Group order page state and lifecycle', () => {
     fixture.detectChanges();
     return { fixture, element: fixture.nativeElement as HTMLElement };
   }
+
+  it('offers the owner a preference toggle and sends its current session revision', () => {
+    const snapshot = structuredClone(SESSIONS);
+    snapshot.participants[0].isSubmitted = false;
+    snapshot.participants[0].revision = 2;
+    service.getSessions$.and.returnValue(of(snapshot));
+    service.setOwnerPreference$.and.returnValue(of({ orderingPreference: 'InRestaurant', isSubmitted: false, revision: 3 }));
+    const { fixture, element } = create();
+
+    button(element, 'In Restaurant')?.click();
+    fixture.detectChanges();
+
+    expect(service.setOwnerPreference$).toHaveBeenCalledOnceWith('reservation', 'InRestaurant', 2);
+    expect(service.submitOwner$).not.toHaveBeenCalled();
+  });
+
+  it('confirms the owner draft once using its displayed order revision', () => {
+    const snapshot = structuredClone(SESSIONS);
+    snapshot.participants[0].isSubmitted = false;
+    snapshot.ownerPreOrder!.revision = 4;
+    service.getSessions$.and.returnValue(of(snapshot));
+    const pending = new Subject<{ orderingPreference: 'Online'; isSubmitted: boolean; revision: number }>();
+    service.submitOwner$.and.returnValue(pending);
+    const { fixture, element } = create();
+
+    button(element, 'Submit My Pre-order')?.click();
+    fixture.detectChanges();
+    const dialog = element.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).toContain('Salad × 1');
+    button(dialog, 'Confirm')?.click();
+    button(dialog, 'Confirm')?.click();
+
+    expect(service.submitOwner$).toHaveBeenCalledOnceWith('reservation', 4);
+    pending.next({ orderingPreference: 'Online', isSubmitted: true, revision: 1 });
+    pending.complete();
+  });
 
   it('shows loading while the invite is pending, then displays the response', () => {
     const invitation = new Subject<GuestInvite>();

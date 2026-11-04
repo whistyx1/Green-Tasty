@@ -52,6 +52,8 @@ public class OrderService : IOrderService
         EnsurePreOrderEditable(reservation.StartTime);
 
         var order = await LoadOrderByReservationIdAsync(reservationId);
+        if (order.OwnerGroupReady && !order.GroupFinalized)
+            throw new ValidationException("The owner's group pre-order is locked until the group is finalized.");
         var previous = SnapshotOrder(order);
         bool shouldSubmit = ConfirmDishInOrder(order, dishId);
 
@@ -73,6 +75,8 @@ public class OrderService : IOrderService
         EnsurePreOrderEditable(reservation.StartTime);
 
         var order = await LoadOrderByReservationIdAsync(reservationId);
+        if (order.OwnerGroupReady && !order.GroupFinalized)
+            throw new ValidationException("The owner's group pre-order is locked until the group is finalized.");
         var previous = SnapshotOrder(order);
 
         bool shouldSubmit = CancelDishInOrder(order, dishId);
@@ -206,10 +210,15 @@ public class OrderService : IOrderService
         if (order!.ReservationId != reservationId ||
             !string.Equals(order.CustomerId, customerId, StringComparison.OrdinalIgnoreCase))
             throw new ActionForbiddenException("This pre-order does not belong to the reservation owner.");
+        if (order.OwnerGroupReady || order.GroupFinalized)
+            throw new ValidationException("This group pre-order cannot be submitted through ordinary order actions.");
         if (order.Status != OrderStatus.Created)
             throw new ValidationException("Only a draft pre-order can be submitted.");
         if (order.Dishes is not { Count: > 0 })
             throw new ValidationException("Add at least one dish before submitting the pre-order.");
+
+        if (await _groupReservationRepository.GetByReservationIdAsync(reservationId) is not null)
+            throw new ValidationException("Use the group owner action to submit a group pre-order.");
 
         await _orderRepository.SubmitOrderIfEligibleAsync(order, reservation);
         context.Logger.LogLine($"Pre-order {order.OrderId} for reservation {reservationId} submitted by customer {customerId}.");
@@ -286,6 +295,7 @@ public class OrderService : IOrderService
         Status = order.Status,
         Revision = order.Revision,
         GroupFinalized = order.GroupFinalized,
+        OwnerGroupReady = order.OwnerGroupReady,
         Dishes = order.Dishes.Select(item => new OrderItem
         {
             DishId = item.DishId,
@@ -296,7 +306,7 @@ public class OrderService : IOrderService
 
     private async Task EnsureCustomerOrderMutableAsync(Order order)
     {
-        if (order.GroupFinalized)
+        if (order.GroupFinalized || order.OwnerGroupReady)
             throw new ValidationException("The finalized group order cannot be changed through ordinary order actions.");
         var groups = await _groupReservationRepository.GetAllByReservationIdAsync(order.ReservationId);
         if (groups?.Any(group => group.Status != GroupReservationStatus.Open) == true)

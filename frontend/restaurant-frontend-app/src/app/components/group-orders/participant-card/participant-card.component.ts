@@ -27,11 +27,13 @@ export class ParticipantCardComponent {
   readonly cartStatus = computed(() =>
     this.ownerOrderFinalized()
       ? 'Included in sent order'
+      : this.participant().orderingPreference === 'InRestaurant'
+        ? 'In Restaurant'
+        : this.participant().isSubmitted
+          ? 'Online Submitted'
       : this.ownerPreOrderSaved()
         ? 'Saved pre-order'
-        : this.participant().isSubmitted
-          ? 'Submitted'
-          : 'Still choosing'
+          : 'Online Pending · Still choosing'
   );
 
   readonly items = computed(() =>

@@ -15,10 +15,11 @@ const caesar = { id: 'dish1', name: 'Caesar Salad', price: 180 };
 const tomYum = { id: 'dish2', name: 'Tom Yum', price: 220 };
 const SESSIONS: GroupSessionsResponse = {
   participants: [
-    { id: 'owner', type: 'Owner', name: 'Yevhenii', isSubmitted: true, total: 180, items: [{ dish: caesar, quantity: 1 }] },
+    { id: 'owner', type: 'Owner', name: 'Yevhenii', isSubmitted: true, total: 0, items: [] },
     { id: 'olena', type: 'Guest', name: 'Olena', isSubmitted: false, total: 220, items: [{ dish: tomYum, quantity: 1 }] },
   ],
   total: 400,
+  ownerPreOrder: { items: [{ dish: caesar, quantity: 1 }], total: 180, editable: true },
 };
 const INVITE = { GroupReservationId: 'grp-1', LocationAddress: 'Rustaveli Avenue 48', MaxGuestCount: 5,
   StartTime: '2026-10-21T16:00:00Z', EndTime: '2026-10-21T17:30:00Z' } as GuestInvite;

@@ -3,7 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { GuestInviteService } from '@app/services/reservation/guest-invite.service';
 import { GuestInvite } from '@app/models/reservations/guest-invite.model';
-import { GuestMenuDish } from '@app/services/guest-sessions/guest-sessions.service';
+import { GuestMenuDish, GuestSessionResponse, OrderingPreference } from '@app/services/guest-sessions/guest-sessions.service';
 import { GuestSessionsService } from '@app/services/guest-sessions/guest-sessions.service';
 
 export type GuestPreorderStatus = 'active' | 'submitted' | 'inactive';
@@ -40,6 +40,10 @@ export class GuestPreorderStore {
     readonly guestName = signal<string>('');
     readonly status = signal<GuestPreorderStatus>('active');
     readonly cartItems = signal<GuestCartItem[]>([]);
+    readonly orderingPreference = signal<OrderingPreference>('Online');
+    readonly revision = signal(0);
+    readonly preferenceBusy = signal(false);
+    readonly preferenceError = signal<string | null>(null);
 
     private readonly guestSessionsService = inject(GuestSessionsService);
 
@@ -83,6 +87,9 @@ export class GuestPreorderStore {
         if (this.contextId() === id) return;
 
         this.contextId.set(id);
+        this.orderingPreference.set('Online');
+        this.revision.set(0);
+        this.preferenceError.set(null);
         this.verifiedSessionId = null;
         void this.loadInviteByToken(id);
 
@@ -234,6 +241,7 @@ export class GuestPreorderStore {
             if (this.guestSessionId() !== id || this.status() !== 'active') return;
             this.menuByCategory.set(res.dishes ?? {});
             this.verifiedSessionId = id;
+            await this.checkSession(true);
         } catch (e) {
             console.log('[menu error]', e);
             if (!this.invalidateIfRevoked(e, id)) {
@@ -293,7 +301,7 @@ export class GuestPreorderStore {
             this.cartError.set('Your guest session has expired. Please rejoin the reservation.');
             return;
         }
-        if (this.cartItems().length === 0 || this.cartBusy()) return;
+        if (this.cartItems().length === 0 || this.cartBusy() || this.orderingPreference() !== 'Online') return;
 
         this.cartBusy.set(true);
         this.cartError.set(null);
@@ -372,7 +380,7 @@ export class GuestPreorderStore {
             this.cartError.set('Your guest session has expired. Please rejoin the reservation.');
             return false;
         }
-        if (this.cartBusy()) return false;
+        if (this.cartBusy() || this.preferenceBusy() || this.orderingPreference() !== 'Online') return false;
 
         this.cartBusy.set(true);
         this.cartError.set(null);
@@ -382,6 +390,9 @@ export class GuestPreorderStore {
                 : this.guestSessionsService.removeDish(sessionId, token, dishId, quantity);
             await firstValueFrom(request);
             updateLocalCart();
+            // Each successful cart write advances the session revision on the server.
+            // Keep the next preference change aligned with that write.
+            this.revision.update(revision => revision + 1);
             return true;
         } catch (error) {
             if (!this.invalidateIfRevoked(error, sessionId))
@@ -392,19 +403,53 @@ export class GuestPreorderStore {
         }
     }
 
-    async checkSession(): Promise<void> {
+    async checkSession(force = false): Promise<void> {
         const id = this.guestSessionId();
         const token = this.guestSessionToken();
-        if (!id || !token || this.status() === 'inactive' || this.verifiedSessionId !== id || this.checkingSession)
+        if (!id || !token || this.status() === 'inactive' || this.verifiedSessionId !== id || this.checkingSession ||
+            (!force && (this.cartBusy() || this.preferenceBusy())))
             return;
         this.checkingSession = true;
         try {
-            await firstValueFrom(this.guestSessionsService.getSession(id, token));
+            const session = await firstValueFrom(this.guestSessionsService.getSession(id, token));
+            if (this.guestSessionId() === id && !this.cartBusy() && !this.preferenceBusy())
+                this.applySession(session);
         } catch (error) {
             this.invalidateIfRevoked(error, id);
         } finally {
             this.checkingSession = false;
         }
+    }
+
+    async setPreference(preference: OrderingPreference): Promise<void> {
+        const id = this.guestSessionId();
+        const token = this.guestSessionToken();
+        if (!id || !token || this.status() !== 'active' || this.cartBusy() || this.preferenceBusy() ||
+            preference === this.orderingPreference()) return;
+        this.preferenceBusy.set(true);
+        this.preferenceError.set(null);
+        try {
+            const session = await firstValueFrom(this.guestSessionsService.setPreference(id, token, preference, this.revision()));
+            if (this.guestSessionId() === id) this.applySession(session);
+        } catch (error) {
+            if (!this.invalidateIfRevoked(error, id)) {
+                this.preferenceError.set('Preference changed or could not be saved. Reloaded current state; please try again.');
+                const current = await firstValueFrom(this.guestSessionsService.getSession(id, token)).catch(() => null);
+                if (current && this.guestSessionId() === id) this.applySession(current);
+            }
+        } finally {
+            this.preferenceBusy.set(false);
+        }
+    }
+
+    private applySession(session: GuestSessionResponse): void {
+        this.orderingPreference.set(session.orderingPreference ?? 'Online');
+        this.revision.set(session.revision ?? 0);
+        this.cartItems.set((session.items ?? []).map(item => ({
+            dishId: item.dish.id, title: item.dish.name, price: item.dish.price,
+            imageUrl: item.dish.imageUrl ?? undefined, qty: item.quantity,
+        })));
+        if (session.isSubmitted) this.status.set('submitted');
     }
 
     private invalidateIfRevoked(error: unknown, sessionId: string): boolean {

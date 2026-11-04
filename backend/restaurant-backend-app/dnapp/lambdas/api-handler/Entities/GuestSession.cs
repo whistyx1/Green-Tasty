@@ -31,4 +31,10 @@ public class GuestSession
 
     [DynamoDBProperty("isSubmitted")]
     public bool IsSubmitted { get; set; }
+
+    [DynamoDBProperty("orderingPreference")]
+    public string? OrderingPreference { get; set; }
+
+    [DynamoDBProperty("revision")]
+    public long Revision { get; set; }
 }

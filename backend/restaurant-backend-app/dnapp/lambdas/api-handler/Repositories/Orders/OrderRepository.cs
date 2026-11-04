@@ -136,7 +136,7 @@ public class OrderRepository : IOrderRepository
                 Key = new() { ["orderId"] = oldItem["orderId"], ["customerId"] = oldItem["customerId"] },
                 UpdateExpression = "SET #s = :newStatus, dishes = :newDishes, #rev = if_not_exists(#rev, :zero) + :one",
                 ConditionExpression = "#s = :oldStatus AND dishes = :oldDishes AND reservationId = :reservation AND " + RevisionCondition(previous.Revision) +
-                    (protectFinalizedGroup ? " AND (attribute_not_exists(#finalized) OR #finalized = :false)" : ""),
+                    (protectFinalizedGroup ? " AND (attribute_not_exists(#finalized) OR #finalized = :false) AND (attribute_not_exists(#ownerReady) OR #ownerReady = :false)" : ""),
                 ExpressionAttributeNames = new() { ["#s"] = "status", ["#rev"] = "revision" },
                 ExpressionAttributeValues = new() {
                     [":oldStatus"] = oldItem["status"], [":oldDishes"] = oldItem["dishes"],
@@ -148,6 +148,7 @@ public class OrderRepository : IOrderRepository
             if (protectFinalizedGroup)
             {
                 request.ExpressionAttributeNames["#finalized"] = "groupFinalized";
+                request.ExpressionAttributeNames["#ownerReady"] = "ownerGroupReady";
                 request.ExpressionAttributeValues[":false"] = new AttributeValue { N = "0" };
             }
             if (order.Status == OrderStatus.Cancelled && previous.Status != OrderStatus.Cancelled)
@@ -198,13 +199,17 @@ public class OrderRepository : IOrderRepository
                     TableName = OrdersTableName,
                     Key = new() { ["orderId"] = oldOrder["orderId"], ["customerId"] = oldOrder["customerId"] },
                     UpdateExpression = "SET #s = :submitted, #rev = if_not_exists(#rev, :zero) + :one",
-                    ConditionExpression = "#s = :draft AND dishes = :dishes AND reservationId = :reservation AND " + RevisionCondition(order.Revision),
-                    ExpressionAttributeNames = new() { ["#s"] = "status", ["#rev"] = "revision" },
+                    ConditionExpression = "#s = :draft AND dishes = :dishes AND reservationId = :reservation AND " +
+                        "(attribute_not_exists(#ownerReady) OR #ownerReady = :false) AND " +
+                        "(attribute_not_exists(#finalized) OR #finalized = :false) AND " + RevisionCondition(order.Revision),
+                    ExpressionAttributeNames = new() { ["#s"] = "status", ["#rev"] = "revision",
+                        ["#ownerReady"] = "ownerGroupReady", ["#finalized"] = "groupFinalized" },
                     ExpressionAttributeValues = new() {
                         [":submitted"] = submitted, [":draft"] = oldOrder["status"],
                         [":dishes"] = oldOrder["dishes"], [":reservation"] = oldOrder["reservationId"],
                         [":expectedRevision"] = oldOrder["revision"],
-                        [":zero"] = new AttributeValue { N = "0" }, [":one"] = new AttributeValue { N = "1" }
+                        [":zero"] = new AttributeValue { N = "0" }, [":one"] = new AttributeValue { N = "1" },
+                        [":false"] = new AttributeValue { N = "0" }
                     }
                 } },
                 new() { ConditionCheck = new ConditionCheck {

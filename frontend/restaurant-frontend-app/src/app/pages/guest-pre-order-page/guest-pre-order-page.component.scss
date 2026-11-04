@@ -62,6 +62,34 @@
     background: color.$bg-yellow;
 }
 
+.ordering-preference {
+    margin: 16px 2.5rem 0;
+    padding: 16px 20px;
+    border: 1px solid color.$neutral-200;
+    border-radius: 12px;
+    background: color.$neutral-0;
+
+    h2 { margin: 0 0 12px; font-size: 18px; }
+    p { margin: 10px 0 0; font-size: 14px; }
+}
+
+.preference-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+
+    button {
+        padding: 8px 14px;
+        border: 1px solid color.$neutral-200;
+        border-radius: 8px;
+        background: color.$neutral-0;
+        cursor: pointer;
+        &[aria-pressed='true'] { border-color: color.$green-300; color: color.$green-300; font-weight: 600; }
+        &:focus-visible { outline: 2px solid color.$green-300; outline-offset: 2px; }
+        &:disabled { opacity: 0.6; cursor: not-allowed; }
+    }
+}
+
 .page-navigation {
     display: flex;
     align-items: center;

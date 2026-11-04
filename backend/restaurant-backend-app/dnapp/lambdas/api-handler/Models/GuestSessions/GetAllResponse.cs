@@ -12,7 +12,9 @@ public record Participant(
     string Name,
     IEnumerable<OrderItemResponse> Items,
     decimal Total,
-    bool IsSubmitted);
+    bool IsSubmitted,
+    string OrderingPreference = OrderingPreference.Online,
+    long Revision = 0);
 
 public enum ParticipantType
 {

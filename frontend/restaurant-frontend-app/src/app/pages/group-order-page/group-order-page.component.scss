@@ -82,6 +82,35 @@
   }
 }
 
+.owner-preference {
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid color.$sage-100;
+  border-radius: 16px;
+  background: color.$neutral-0;
+
+  h2 { margin: 0 0 12px; font-size: 18px; }
+  p { margin: 12px 0; font-size: 14px; }
+}
+
+.preference-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+
+  button {
+    padding: 8px 14px;
+    border: 1px solid color.$sage-100;
+    border-radius: 8px;
+    background: color.$neutral-0;
+    cursor: pointer;
+    &[aria-pressed='true'] { border-color: color.$green-800; color: color.$green-800; font-weight: 600; }
+    &:focus-visible { outline: 2px solid color.$green-800; outline-offset: 2px; }
+    &:disabled { cursor: not-allowed; opacity: 0.6; }
+  }
+}
+
 .order-summary {
   border-top: 2px solid color.$sage-100;
   padding-top: 20px;
