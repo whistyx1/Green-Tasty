@@ -1,0 +1,208 @@
+# Green Tasty — Feature Backlog v1.2
+
+**Target deadline:** November 5, 2026
+**Status:** F1–F4, F6, and F7 implemented and deployed to dev; F5 pending
+**Scope:** Seven features (F1–F7)
+
+## Priorities
+
+| ID | Feature | Priority |
+|---|---|---|
+| F1 | Persistent Group Invitation Link & Authorization | P0 |
+| F2 | Single Reservation Direct Submission | P0 |
+| F3 | Reservation Dashboard Filters | P1 |
+| F4 | Per-Guest Ordering Preference | P0 |
+| F5 | Manual Pre-order Reminders | P2 |
+| F6 | Submission Confirmation Dialogs | P0 |
+| F7 | Group Pre-order Progress & Finalization Rules | P1 |
+
+P0 = essential; P1 = important; P2 = stretch goal.
+
+## F1 — Persistent Group Invitation Link & Authorization
+
+**Goal:** Allow group reservation owners to retrieve and copy their existing invitation link after dismissing the original success modal.
+
+**Requirements:**
+- Display a Copy Invitation Link action in the existing group reservation card on the reservation dashboard.
+- Only the reservation owner can access this action and retrieve the invitation token.
+- Reuse the existing invitation token and link format.
+- Disable the action after final group-order submission or reservation expiration.
+- Enforce ownership, reservation state, and token access rules on the backend.
+- Do not expose invitation tokens to unrelated authenticated users.
+
+**Acceptance criteria:**
+- The owner can copy the same invitation link after reloading the page.
+- Non-owners cannot retrieve the token, including through direct API requests.
+- Submitted or expired reservations cannot use the action.
+- Existing invitation and guest-join workflows remain functional.
+
+## F2 — Single Reservation Direct Submission
+
+**Goal:** Allow a user to submit an order directly from a reservation card when the reservation has exactly one guest.
+
+**Requirements:**
+- Add a Submit Pre-order action to eligible single-guest reservations.
+- Reuse the existing ordinary-order submission workflow.
+- Open the F6 confirmation dialog before submission.
+- Disable submission for empty carts.
+- Explain disabled submission through an accessible tooltip or equivalent message.
+- Submit only the order belonging to the selected reservation.
+- Preserve existing ordinary-order edit, unsubmit, and cancel rules.
+
+**Acceptance criteria:**
+- Submitting one reservation does not submit another reservation's cart.
+- Empty orders cannot be submitted.
+- Canceling the confirmation dialog leaves the order unchanged.
+- Repeated clicks do not create duplicate submissions.
+
+## F3 — Reservation Dashboard Filters
+
+**Goal:** Make it easier to locate relevant reservations and orders.
+
+**Scope:** Reservation dashboard only; no duplicate filter controls in the cart drawer.
+
+**Requirements:**
+- Filter by reservation date.
+- Filter by submission status.
+- Filter by exact guest count.
+- Add a Hide Cancelled Reservations toggle.
+- Support combined filters and a Clear Filters action.
+- Show a useful empty state when nothing matches.
+- Map ordinary-order and group-order statuses consistently.
+
+**Acceptance criteria:**
+- Filtering does not modify reservation or order data.
+- Multiple filters work together.
+- Clearing filters restores the unfiltered list.
+- Cancelled reservations are hidden only when the toggle is enabled.
+
+## F4 — Per-Guest Ordering Preference
+
+**Goal:** Let each group participant independently decide whether to pre-order online or order at the restaurant.
+
+**Requirements:**
+- Provide Online and In Restaurant options for each participant.
+- Allow switching before the participant submits an online pre-order.
+- Preserve draft cart contents when switching to In Restaurant.
+- Exclude preserved drafts from active online submission and totals.
+- Restore preserved drafts when switching back to Online.
+- An Online participant with an empty cart remains Pending.
+- In Restaurant participants do not block final group submission.
+- Submitted individual pre-orders and their ordering preferences are immutable through the application.
+- Prevent stale or concurrent writes from overwriting submitted data.
+- Support legacy guest sessions without the new preference field.
+- Do not add a separate Skip Pre-order state.
+
+**Acceptance criteria:**
+- Switching modes never silently deletes draft dishes.
+- Rapid switching cannot corrupt participant state.
+- Backend authorization and state checks prevent invalid transitions.
+- Submitted guest carts cannot be modified by stale requests.
+
+## F5 — Manual Pre-order Reminders
+
+**Goal:** Allow a group owner to remind participants who have not submitted their online pre-orders.
+
+**Requirements:**
+- Only the group owner can send reminders.
+- Reminders are available during the final 60 minutes before the reservation begins.
+- Only active Online participants with unsubmitted pre-orders are eligible.
+- Enforce a 15-minute cooldown per participant and reservation on the backend.
+- Deliver reminders by email when a usable guest email address is available.
+- Otherwise, create a persistent in-app notification accessible to the corresponding guest session.
+- Support invited guests without registered accounts.
+- Prevent duplicate reminder requests.
+- Handle delivery failures and authorization correctly.
+- Reuse existing SES infrastructure where appropriate, with least-privilege permissions.
+- Design optional guest email collection with clear purpose, appropriate consent/privacy handling, and a way to update or remove the address.
+
+**Acceptance criteria:**
+- Ineligible guests cannot be reminded.
+- Reminders are allowed only between 60 and 30 minutes before the reservation start time.
+- Preserve the existing pre-order submission cutoff of 30 minutes before the reservation.
+- Use the same authoritative server-side cutoff rules as the existing pre-order workflow.
+- Do not allow reminders after pre-order submission has closed.
+- The existing 15-minute per-guest reminder cooldown remains unchanged.
+- Cooldown cannot be bypassed by repeated API requests.
+- Guest notifications are accessible only to their intended recipient.
+- The UI does not report successful delivery when delivery failed.
+
+## F6 — Submission Confirmation Dialogs
+
+**Goal:** Prevent accidental submissions and show users exactly what they are confirming.
+
+**Requirements:**
+- Show confirmation before ordinary single-reservation submission.
+- Show confirmation before individual group participant submission.
+- Show confirmation before final owner group submission.
+- Display relevant dishes, quantities, and total price.
+- Use a reusable confirmation component where practical.
+- Preserve the existing ordinary-order edit, unsubmit, and cancel lifecycle.
+- For ordinary orders, show wording consistent with the existing cutoff and modification rules.
+- For individual group pre-orders, clearly explain that submitted guest carts cannot be modified through the app.
+- For final group submission, clearly explain the finalization consequences.
+- Prevent duplicate requests and reject stale or invalid submissions.
+
+**Acceptance criteria:**
+- Cancel never changes the order state.
+- Confirm submits the intended order only once.
+- Displayed totals correspond to the relevant submission.
+- Confirmation warnings accurately reflect backend-enforced rules.
+
+## F7 — Group Pre-order Progress & Finalization
+
+**Goal:** Let group owners monitor individual guest readiness and finalize the group safely.
+
+**Requirements:**
+- Display a persistent owner-only progress section.
+- Show participant names and states: Online Pending, Online Submitted, In Restaurant.
+- The reservation owner participates in the Online / In Restaurant ordering preference model.
+- When the owner selects Online, their eligible draft order participates in the group online pre-order, and the owner is counted exactly once in progress.
+- When the owner selects In Restaurant, preserve their draft order but exclude it from active group submission and online progress.
+- Switching back to Online restores the preserved draft.
+- Once the owner's individual pre-order is submitted, their ordering preference cannot be changed.
+- Prevent the owner's order from being included twice in the final group submission.
+- Preserve the existing behavior of the owner's unrelated ordinary reservations and orders.
+- Account for the existing separate owner session and ordinary-order representations when implementing these rules.
+- Do not count the owner twice because of separate owner session/order representations.
+- Count only Online participants in the online submission denominator.
+- In Restaurant participants do not block final submission.
+- Final submission is allowed only when all Online participants have submitted valid, non-empty pre-orders.
+- Revalidate the participant set and states atomically during final submission.
+- If every participant chooses In Restaurant, allow the owner to close the online pre-order workflow without creating an empty order.
+- Display accurate progress before and after finalization.
+- Handle concurrent membership, preference, and submission changes safely.
+
+**Acceptance criteria:**
+- Pending Online participants block final submission.
+- In Restaurant participants do not block final submission.
+- Owner participation is counted exactly once.
+- No empty group order is created when all participants choose In Restaurant.
+- Concurrent changes cannot bypass finalization requirements.
+- Switching the owner's ordering preference does not delete their draft or affect unrelated orders.
+- The owner's order is included in the final group submission exactly once when eligible, and excluded when In Restaurant.
+
+## Cross-feature Engineering Requirements
+
+- Reuse existing Angular, .NET, DynamoDB, and Terraform architecture where practical.
+- Enforce authorization and business rules on the backend.
+- Preserve existing homework functionality and public API contracts unless an intentional change is approved.
+- Maintain compatibility with existing reservation and order records.
+- Do not delete test reservations or other stored data automatically.
+- Add focused unit and integration tests for changed behavior.
+- Cover concurrency, authorization, empty-state, and duplicate-request cases.
+- Run relevant regression suites before deployment.
+- Keep changes isolated by feature and use focused commits.
+- Do not deploy or modify AWS resources without explicit approval.
+
+## Proposed Implementation Sequence
+
+1. F1 — Invitation authorization and persistent link.
+2. F6 — Submission confirmation dialogs.
+3. F2 — Single-reservation direct submission.
+4. F3 — Reservation dashboard filters.
+5. F4 — Guest ordering preference and concurrency protection.
+6. F7 — Group progress and safe finalization.
+7. F5 — Manual reminders and notification delivery.
+
+**Note:** Priority indicates business importance, while implementation order reflects technical dependencies. The deadline does not justify skipping authorization, data-integrity checks, or regression testing.
