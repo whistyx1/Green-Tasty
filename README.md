@@ -18,6 +18,7 @@ Green & Tasty is a restaurant booking and group pre-order application. Customers
 - [Backend](backend/restaurant-backend-app/README.md) — Lambda source, API routes, and .NET tests.
 - [Infrastructure](infra/terraform/README.md) — Terraform configuration and deployment steps.
 - [End-to-end tests](aqa/restaurant-aqa-framework/README.md) — API and browser test framework.
+- [Feature records](docs/features/README.md) — implemented features and verification notes.
 - `scripts/` — packaging, validation, and deployment helpers.
 
 ## Run locally
