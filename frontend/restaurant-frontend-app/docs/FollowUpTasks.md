@@ -180,3 +180,17 @@ unimplemented. Earlier descriptions/screenshots above are pre-fix evidence,
 not the current implementation status. See
 [display fix record](../../../docs/epam-homework/FrontendUiFixes.md) for delegation,
 verification limits, and the single remaining visual check.
+
+## FE-009 — Do not offer pre-order editing for cancelled reservations
+
+**Type:** Usability bug. **Status:** Observed on 2026-11-03; deferred until after the planned features.
+
+The cart's Add dish action can open the menu in pre-order mode for a cancelled
+reservation. The menu still offers Pre-Order buttons, although the backend
+correctly rejects edits because the reservation is no longer Reserved. The UI
+now shows that server message instead of a raw HTTP error.
+
+**Follow-up:** use the reservation's authoritative status and edit cutoff to
+disable or hide editing actions in the cart and menu, with a clear explanation.
+Keep the backend checks in place. Verify cancelled and expired reservations are
+blocked while an eligible upcoming reservation can still add dishes.

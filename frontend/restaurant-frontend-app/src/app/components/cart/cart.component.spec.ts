@@ -131,6 +131,30 @@ describe('CartComponent', () => {
     orderItems: [{ dish: { id: 'salad', name: 'Salad', price: 8 }, quantity: 2 }],
   } as Order;
 
+  it('Add dish opens the selected reservation menu and closes the cart', () => {
+    component.orders.set([{ ...draft, orderItems: [] }, { ...draft, orderId: 'order-2', reservationId: 'reservation-2' }]);
+    fixture.detectChanges();
+    spyOn(component.closeCartEvent, 'emit');
+
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('app-not-submitted-order .add-dish-btn')
+      ?.click();
+
+    expect(routerMock.navigate).toHaveBeenCalledOnceWith(['/menu'], {
+      queryParams: {
+        preOrder: 'true',
+        reservationId: 'reservation-1',
+        reservationLabel: 'Street, 2030-01-01T12:00:00Z',
+      },
+    });
+    expect(component.closeCartEvent.emit).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not navigate from an unavailable draft order', () => {
+    component.addDishToOrder('missing-order');
+    expect(routerMock.navigate).not.toHaveBeenCalled();
+  });
+
   it('opens ordinary confirmation with the selected dish and total; Cancel does not submit', () => {
     component.orders.set([draft]);
     component.openSubmission(draft.orderId);

@@ -1,12 +1,14 @@
 import { provideRouter, Router } from '@angular/router';
-import { provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { AuthenticationService } from '@app/auth/services/authentication.service';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MenuPageComponent } from './menu-page.component';
 import { API_BASE_URL } from '@app/shared/config/api-base-url.token';
 import { DishListResponse } from '@app/models/dishes/dish-list-response.model';
+import { PreOrdersService } from '@app/services/pre-orders/pre-orders.service';
+import { ToastService } from '@app/services/toast/toast.service';
 
 describe('MenuPageComponent', () => {
   let component: MenuPageComponent;
@@ -64,5 +66,29 @@ describe('MenuPageComponent', () => {
     expect(gridBounds.width).toBeGreaterThan(0);
     expect(firstRow.length).toBeGreaterThan(1);
     expect(Math.abs(leftInset - rightInset)).toBeLessThanOrEqual(1);
+  });
+
+  it('does not replace an order validation response with a raw HTTP error toast', () => {
+    const dish: DishListResponse = {
+      id: 'dish-0', name: 'Marathon Demo Salad', imageUrl: '', price: 8,
+      state: 'Available', weight: '250 g', dishType: 'Appetizer',
+      description: 'Demo dish', calories: '180', proteins: '0',
+      carbohydrates: '0', fats: '0', vitamins: 'A',
+    };
+    const service = TestBed.inject(PreOrdersService);
+    const toast = TestBed.inject(ToastService);
+    spyOn(service, 'addDishToPreOrderByReservationId').and.returnValue(
+      throwError(() => new HttpErrorResponse({
+        status: 400,
+        error: { error: 'Pre-orders can only be modified up to 30 minutes before the reservation start time.' },
+      }))
+    );
+    const localErrorToast = spyOn(toast, 'error');
+    component.preOrderReservationId = 'reservation-1';
+
+    component.addDishToCart(dish);
+
+    expect(service.addDishToPreOrderByReservationId).toHaveBeenCalledOnceWith('reservation-1', dish, 1);
+    expect(localErrorToast).not.toHaveBeenCalled();
   });
 });

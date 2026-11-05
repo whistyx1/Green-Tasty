@@ -80,7 +80,8 @@
 // ✅ CONTENT SECTION
 .content-sections {
   max-width: 100%;
-  margin: 2.5rem;
+  margin: 2.5rem 2.5rem 0;
+  padding-bottom: 2rem;
   display: flex;
   flex-direction: column;
   gap: 4rem;
@@ -192,7 +193,7 @@
   }
 
   .content-sections {
-    margin: 0.5rem;
+    margin: 0.5rem 0.5rem 0;
     gap: 2rem;
   }
 

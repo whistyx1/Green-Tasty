@@ -197,6 +197,9 @@
       gap: 0.5rem;
 
       .dish-name {
+        flex: 1 1 0;
+        min-width: 0;
+        overflow-wrap: anywhere;
         font-weight: 500;
         font-size: 1rem;
         line-height: 1.5rem;
@@ -206,8 +209,10 @@
 
       .dish-meta {
         display: flex;
+        flex: none;
         flex-direction: column;
-        align-items: end;
+        align-items: flex-end;
+        white-space: nowrap;
         gap: 0.25rem;
 
         .dish-price {

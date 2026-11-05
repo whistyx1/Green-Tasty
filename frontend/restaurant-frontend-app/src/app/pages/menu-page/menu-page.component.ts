@@ -145,8 +145,8 @@ export class MenuPageComponent implements OnInit {
         next: () => {
           this.toast.success('Dish added to cart successfully!', 'Success');
         },
-        error: (err) => {
-          this.toast.error((err as Error).message, 'Error');
+        error: () => {
+          // The HTTP interceptor already displays the server's validation message.
         },
       });
   }
