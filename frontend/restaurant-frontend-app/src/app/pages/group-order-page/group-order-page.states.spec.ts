@@ -53,6 +53,7 @@ describe('Group order page state and lifecycle', () => {
       'submit$',
       'setOwnerPreference$',
       'submitOwner$',
+      'remindGuest$',
     ]);
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
     service.getGroupInvite$.and.returnValue(of(INVITE));
@@ -81,6 +82,72 @@ describe('Group order page state and lifecycle', () => {
     fixture.detectChanges();
     return { fixture, element: fixture.nativeElement as HTMLElement };
   }
+
+  it('offers a reminder only to an active Online pending guest during the 60–30 minute window', () => {
+    service.getGroupInvite$.and.returnValue(of({ ...INVITE, StartTime: new Date(Date.now() + 45 * 60_000).toISOString() }));
+    const snapshot = structuredClone(SESSIONS);
+    snapshot.participants.push({ id: 'pending', type: 'Guest', name: 'Pending Guest', isSubmitted: false, orderingPreference: 'Online', items: [], total: 0 });
+    snapshot.participants.push({ id: 'ready', type: 'Guest', name: 'Ready Guest', isSubmitted: true, orderingPreference: 'Online', items: [{ dish: { id: 'salad', name: 'Salad', price: 8 }, quantity: 1 }], total: 8 });
+    snapshot.participants.push({ id: 'offline', type: 'Guest', name: 'Offline Guest', isSubmitted: false, orderingPreference: 'InRestaurant', items: [], total: 0 });
+    service.getSessions$.and.returnValue(of(snapshot));
+    service.remindGuest$.and.returnValue(of({ channel: 'InApp', nextAllowedAt: new Date(Date.now() + 15 * 60_000).toISOString() }));
+    const { fixture, element } = create();
+
+    const actions = element.querySelectorAll('button[aria-label^="Remind "]');
+    expect(actions.length).toBe(1);
+    expect(actions[0].getAttribute('aria-label')).toContain('Pending Guest');
+    (actions[0] as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(service.remindGuest$).toHaveBeenCalledOnceWith('group', 'pending');
+    expect(element.textContent).toContain('Reminder added to this guest’s notifications.');
+    expect((actions[0] as HTMLButtonElement).disabled).toBeTrue();
+  });
+
+  it('prevents a second reminder while one request is pending and shows delivery errors', () => {
+    service.getGroupInvite$.and.returnValue(of({ ...INVITE, StartTime: new Date(Date.now() + 45 * 60_000).toISOString() }));
+    const snapshot = structuredClone(SESSIONS);
+    snapshot.participants.push({ id: 'pending', type: 'Guest', name: 'Guest', isSubmitted: false, orderingPreference: 'Online', items: [], total: 0 });
+    service.getSessions$.and.returnValue(of(snapshot));
+    const pending = new Subject<{ channel: 'Email'; nextAllowedAt: string }>();
+    service.remindGuest$.and.returnValue(pending);
+    const { fixture, element } = create();
+    const action = element.querySelector('button[aria-label^="Remind "]') as HTMLButtonElement;
+
+    action.click();
+    action.click();
+    expect(service.remindGuest$).toHaveBeenCalledTimes(1);
+    pending.error(new HttpErrorResponse({ status: 500, statusText: 'Server Error' }));
+    fixture.detectChanges();
+    expect(element.textContent).toContain('Reminder could not be delivered.');
+    expect(element.textContent).not.toContain('queued for delivery');
+  });
+
+  it('hides reminder actions outside the server-approved time window', () => {
+    service.getGroupInvite$.and.returnValue(of({ ...INVITE, StartTime: new Date(Date.now() + 70 * 60_000).toISOString() }));
+    const snapshot = structuredClone(SESSIONS);
+    snapshot.participants.push({ id: 'pending', type: 'Guest', name: 'Guest', isSubmitted: false, orderingPreference: 'Online', items: [], total: 0 });
+    service.getSessions$.and.returnValue(of(snapshot));
+    const { element } = create();
+    expect(element.querySelector('button[aria-label^="Remind "]')).toBeNull();
+    expect(service.remindGuest$).not.toHaveBeenCalled();
+  });
+
+  it('does not claim delivery or suggest an immediate retry when SES acceptance is uncertain', () => {
+    service.getGroupInvite$.and.returnValue(of({ ...INVITE, StartTime: new Date(Date.now() + 45 * 60_000).toISOString() }));
+    const snapshot = structuredClone(SESSIONS);
+    snapshot.participants.push({ id: 'pending', type: 'Guest', name: 'Guest', isSubmitted: false, orderingPreference: 'Online', items: [], total: 0 });
+    service.getSessions$.and.returnValue(of(snapshot));
+    service.remindGuest$.and.returnValue(throwError(() => new HttpErrorResponse({ status: 503, statusText: 'Service Unavailable' })));
+    const { fixture, element } = create();
+
+    (element.querySelector('button[aria-label^="Remind "]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(element.textContent).toContain('Email acceptance could not be confirmed.');
+    expect(element.textContent).toContain('wait 15 minutes');
+    expect(element.textContent).not.toContain('queued for delivery');
+  });
 
   it('offers the owner a preference toggle and sends its current session revision', () => {
     const snapshot = structuredClone(SESSIONS);

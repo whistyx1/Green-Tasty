@@ -146,6 +146,9 @@
   "/guest/groups/{groupReservationId}/sessions/{guestSessionId}": {
     "DELETE": true
   },
+  "/guest/groups/{groupReservationId}/sessions/{guestSessionId}/reminder": {
+    "POST": true
+  },
   "/reservations/{reservationId}/guest-session-id": {
     "GET": true
   },
@@ -166,6 +169,13 @@
   },
   "/guest/sessions/{guestSessionId}/ordering-preference": {
     "PATCH": false
+  },
+  "/guest/sessions/{guestSessionId}/email": {
+    "PUT": false,
+    "DELETE": false
+  },
+  "/guest/sessions/{guestSessionId}/notifications": {
+    "GET": false
   },
   "/reservations/{reservationId}/group-ordering-preference": {
     "PATCH": true

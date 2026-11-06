@@ -114,12 +114,31 @@
       <section class="group-progress" aria-labelledby="group-progress-title">
         <h2 id="group-progress-title">Group pre-order progress</h2>
         <p class="progress-count" role="status">{{ submittedOnlineCount() }} of {{ onlineCount() }} Online participants submitted</p>
+        @if (status() === 'Open') {
+          <p class="reminder-hint">Reminders are available from 60 to 30 minutes before the reservation starts for guests still preparing an Online pre-order.</p>
+        }
         <ul aria-label="Participant ordering status">
           @for (person of progressParticipants(); track person.id) {
             <li>
               <span>{{ person.name }}{{ person.type === 'Owner' ? ' (you)' : '' }}</span>
               <span>{{ person.orderingPreference === 'InRestaurant' ? 'In Restaurant' :
                 isOnlineReady(person) ? 'Online Submitted' : 'Online Pending' }}</span>
+              @if (person.type === 'Guest' && !person.isSubmitted && person.orderingPreference !== 'InRestaurant' && reminderWindowOpen()) {
+                <span class="reminder-action">
+                  <button class="secondary-button" type="button" [disabled]="!canRemind(person)"
+                    (click)="remindGuest(person)" [attr.aria-label]="'Remind ' + person.name + ' to submit their pre-order'">
+                    {{ remindingGuestId() === person.id ? 'Sending…' : 'Send reminder' }}
+                  </button>
+                  @if (reminderNextAllowedAt()[person.id]; as next) {
+                    @if (!canRemind(person)) {
+                      <small>Available again after {{ next | date: 'HH:mm' }}</small>
+                    }
+                  }
+                </span>
+              }
+              @if (reminderFeedback()[person.id]; as feedback) {
+                <span class="reminder-feedback" role="status">{{ feedback }}</span>
+              }
             </li>
           }
         </ul>

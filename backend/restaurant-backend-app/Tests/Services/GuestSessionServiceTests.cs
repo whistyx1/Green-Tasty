@@ -41,6 +41,13 @@ public class GuestSessionServiceTests
     }
 
     [Fact]
+    public async Task IsAuthorized_MalformedGuestToken_ReturnsFalse()
+    {
+        Assert.False(await _guestSessionService.IsAuthorizedAsync("not-base64!", "guest"));
+        _mockGuestSessionRepository.Verify(r => r.GetByTokenHash(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
     public async Task GetSession_LegacyPreferenceDefaultsToOnlineWithoutChangingStoredCart()
     {
         var session = new GuestSession { Id = "guest", GroupReservationId = "group", GuestName = "Guest", Dishes = [] };

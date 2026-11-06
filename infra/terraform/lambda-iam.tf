@@ -14,7 +14,7 @@ resource "aws_iam_role" "lambda" {
 locals {
   table_arns = flatten([for table in aws_dynamodb_table.backend : [table.arn, "${table.arn}/index/*"]])
   lambda_statements = {
-    api-handler = [
+    api-handler = concat([
       {
         Effect   = "Allow"
         Action   = ["dynamodb:Scan", "dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem", "dynamodb:BatchGetItem", "dynamodb:BatchWriteItem", "dynamodb:DeleteItem", "dynamodb:UpdateItem", "dynamodb:DescribeTable"]
@@ -40,7 +40,11 @@ locals {
         Action   = ["sqs:SendMessage", "sqs:GetQueueUrl"]
         Resource = [aws_sqs_queue.reports.arn]
       }
-    ]
+      ], var.enable_reminder_email && trimspace(var.email_from) != "" ? [{
+        Effect   = "Allow"
+        Action   = ["ses:SendEmail"]
+        Resource = [aws_ses_email_identity.reports[0].arn]
+    }] : [])
     reports-handler = [
       {
         Effect   = "Allow"

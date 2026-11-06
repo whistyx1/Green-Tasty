@@ -36,6 +36,14 @@ describe('Owner group and guest token isolation', () => {
     });
   }
 
+  it('attaches Cognito when the Owner sends a guest reminder', () => {
+    const url = 'https://api.test/develop/guest/groups/group-id/sessions/guest-id/reminder';
+    http.post(url, {}).subscribe();
+    const request = requests.expectOne(url);
+    expect(request.request.headers.get('Authorization')).toBe('Bearer cognito-test-token');
+    request.flush({ channel: 'InApp', nextAllowedAt: '2026-11-06T20:20:00Z' });
+  });
+
   it('preserves the explicit guest token and cart body', () => {
     const url = 'https://api.test/guest/sessions/guest-id/dishes';
     const body = { dishId: 'salad', quantity: 2 };

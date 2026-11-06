@@ -1,4 +1,5 @@
 import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { RouterLink } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -12,6 +13,7 @@ import { MainCoverImageComponent } from '@app/shared/custom-components/main-cove
 import { ToastService } from '@app/services/toast/toast.service';
 import { SubmissionConfirmationComponent, SubmissionItem } from '@app/shared/custom-components/submission-confirmation/submission-confirmation.component';
 import { GuestPreorderStore } from './state/guest-preorder.store';
+import { environment } from 'src/environments/environment';
 
 import { GuestNameModalComponent } from './ui/guest-name-modal/guest-name-modal.component';
 import { GuestCartDrawerComponent } from './ui/guest-cart-drawer/guest-cart-drawer.component';
@@ -29,7 +31,8 @@ import { GuestPreorderSubmittedComponent } from './ui/guest-preorder-submitted/g
         GuestNameModalComponent,
         GuestCartDrawerComponent,
         GuestPreorderSubmittedComponent,
-        SubmissionConfirmationComponent
+        SubmissionConfirmationComponent,
+        DatePipe
     ],
 })
 export class GuestPreOrderPageComponent {
@@ -39,9 +42,11 @@ export class GuestPreOrderPageComponent {
     private readonly destroyRef = inject(DestroyRef);
 
     readonly store = inject(GuestPreorderStore);
+    readonly reminderEmailEnabled = environment.reminderEmailEnabled;
     readonly isCartOpen = signal(false);
     readonly confirmationOpen = signal(false);
     readonly submitting = signal(false);
+    readonly showReminders = signal(false);
     readonly confirmationItems = computed<SubmissionItem[]>(() =>
         this.store.cartItems().map(item => ({ name: item.title, quantity: item.qty, unitPrice: item.price }))
     );
@@ -102,7 +107,7 @@ export class GuestPreOrderPageComponent {
     }
 
     openConfirmation(): void {
-        if (this.store.status() !== 'active' || this.store.cartBusy() || this.store.orderingPreference() !== 'Online' ||
+        if (this.store.status() !== 'active' || this.store.cartBusy() || this.store.emailBusy() || this.store.orderingPreference() !== 'Online' ||
             !this.store.cartItems().length || this.submitting()) return;
         this.confirmationOpen.set(true);
     }
@@ -112,7 +117,7 @@ export class GuestPreOrderPageComponent {
     }
 
     async confirmSubmission(): Promise<void> {
-        if (!this.confirmationOpen() || this.submitting() || this.store.cartBusy() ||
+        if (!this.confirmationOpen() || this.submitting() || this.store.cartBusy() || this.store.emailBusy() ||
             this.store.status() !== 'active' || this.store.orderingPreference() !== 'Online' || !this.store.cartItems().length) return;
         this.submitting.set(true);
         try {
@@ -125,6 +130,11 @@ export class GuestPreOrderPageComponent {
 
     openCart() { this.isCartOpen.set(true); }
     closeCart() { this.isCartOpen.set(false); }
+
+    toggleReminders(): void {
+        this.showReminders.update(open => !open);
+        if (this.showReminders()) void this.store.loadReminderNotifications();
+    }
 
     retryInviteLoad(): void {
         const token = this.token();

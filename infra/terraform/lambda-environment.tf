@@ -8,6 +8,8 @@ locals {
         reports_queue_name                = aws_sqs_queue.reports.name
         OrderIndexReservationId           = "GSI_ReservationId"
         REGION                            = var.aws_region
+        EmailFrom                         = var.email_from
+        ReminderEmailEnabled              = tostring(var.enable_reminder_email)
         notificationsTable                = aws_dynamodb_table.backend["Notifications"].name
         FEEDBACK_TABLE_NAME               = aws_dynamodb_table.backend["Feedback"].name
         locationsTable                    = aws_dynamodb_table.backend["Locations"].name

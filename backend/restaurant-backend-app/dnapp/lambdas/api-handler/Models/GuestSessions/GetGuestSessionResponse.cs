@@ -9,4 +9,6 @@ public record GetGuestSessionResponse(
     decimal Total,
     bool IsSubmitted,
     string OrderingPreference = OrderingPreference.Online,
-    long Revision = 0);
+    long Revision = 0,
+    string? Email = null,
+    bool EmailConsent = false);

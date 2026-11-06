@@ -3,7 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { GuestInviteService } from '@app/services/reservation/guest-invite.service';
 import { GuestInvite } from '@app/models/reservations/guest-invite.model';
-import { GuestMenuDish, GuestSessionResponse, OrderingPreference } from '@app/services/guest-sessions/guest-sessions.service';
+import { GuestMenuDish, GuestReminderNotification, GuestSessionResponse, OrderingPreference } from '@app/services/guest-sessions/guest-sessions.service';
 import { GuestSessionsService } from '@app/services/guest-sessions/guest-sessions.service';
 
 export type GuestPreorderStatus = 'active' | 'submitted' | 'inactive';
@@ -44,6 +44,17 @@ export class GuestPreorderStore {
     readonly revision = signal(0);
     readonly preferenceBusy = signal(false);
     readonly preferenceError = signal<string | null>(null);
+    readonly reminderEmail = signal<string | null>(null);
+    readonly reminderConsent = signal(false);
+    readonly emailInput = signal('');
+    readonly emailConsentInput = signal(false);
+    private readonly emailDraftDirty = signal(false);
+    readonly emailBusy = signal(false);
+    readonly emailError = signal<string | null>(null);
+    readonly emailMessage = signal<string | null>(null);
+    readonly notifications = signal<GuestReminderNotification[]>([]);
+    readonly notificationsBusy = signal(false);
+    readonly notificationsError = signal<string | null>(null);
 
     private readonly guestSessionsService = inject(GuestSessionsService);
 
@@ -90,6 +101,7 @@ export class GuestPreorderStore {
         this.orderingPreference.set('Online');
         this.revision.set(0);
         this.preferenceError.set(null);
+        this.clearReminderState();
         this.verifiedSessionId = null;
         void this.loadInviteByToken(id);
 
@@ -301,7 +313,7 @@ export class GuestPreorderStore {
             this.cartError.set('Your guest session has expired. Please rejoin the reservation.');
             return;
         }
-        if (this.cartItems().length === 0 || this.cartBusy() || this.orderingPreference() !== 'Online') return;
+        if (this.cartItems().length === 0 || this.cartBusy() || this.emailBusy() || this.orderingPreference() !== 'Online') return;
 
         this.cartBusy.set(true);
         this.cartError.set(null);
@@ -345,6 +357,7 @@ export class GuestPreorderStore {
             localStorage.removeItem(this.key(ctx, 'guestSessionToken'));
             this.guestSessionId.set(null);
             this.guestSessionToken.set(null);
+            this.clearReminderState();
             this.verifiedSessionId = null;
             this.menuByCategory.set({});
             this.menuError.set(null);
@@ -380,7 +393,7 @@ export class GuestPreorderStore {
             this.cartError.set('Your guest session has expired. Please rejoin the reservation.');
             return false;
         }
-        if (this.cartBusy() || this.preferenceBusy() || this.orderingPreference() !== 'Online') return false;
+        if (this.cartBusy() || this.preferenceBusy() || this.emailBusy() || this.orderingPreference() !== 'Online') return false;
 
         this.cartBusy.set(true);
         this.cartError.set(null);
@@ -406,13 +419,13 @@ export class GuestPreorderStore {
     async checkSession(force = false): Promise<void> {
         const id = this.guestSessionId();
         const token = this.guestSessionToken();
-        if (!id || !token || this.status() === 'inactive' || this.verifiedSessionId !== id || this.checkingSession ||
+        if (!id || !token || this.status() === 'inactive' || this.verifiedSessionId !== id || this.checkingSession || this.emailBusy() ||
             (!force && (this.cartBusy() || this.preferenceBusy())))
             return;
         this.checkingSession = true;
         try {
             const session = await firstValueFrom(this.guestSessionsService.getSession(id, token));
-            if (this.guestSessionId() === id && !this.cartBusy() && !this.preferenceBusy())
+            if (this.guestSessionId() === id && !this.cartBusy() && !this.preferenceBusy() && !this.emailBusy())
                 this.applySession(session);
         } catch (error) {
             this.invalidateIfRevoked(error, id);
@@ -424,7 +437,7 @@ export class GuestPreorderStore {
     async setPreference(preference: OrderingPreference): Promise<void> {
         const id = this.guestSessionId();
         const token = this.guestSessionToken();
-        if (!id || !token || this.status() !== 'active' || this.cartBusy() || this.preferenceBusy() ||
+        if (!id || !token || this.status() !== 'active' || this.cartBusy() || this.preferenceBusy() || this.emailBusy() ||
             preference === this.orderingPreference()) return;
         this.preferenceBusy.set(true);
         this.preferenceError.set(null);
@@ -443,6 +456,14 @@ export class GuestPreorderStore {
     }
 
     private applySession(session: GuestSessionResponse): void {
+        if ('email' in session || 'emailConsent' in session) {
+            this.reminderEmail.set(session.email ?? null);
+            this.reminderConsent.set(session.emailConsent ?? false);
+            if (!this.emailDraftDirty()) {
+                this.emailInput.set(session.email ?? '');
+                this.emailConsentInput.set(session.emailConsent ?? false);
+            }
+        }
         this.orderingPreference.set(session.orderingPreference ?? 'Online');
         this.revision.set(session.revision ?? 0);
         this.cartItems.set((session.items ?? []).map(item => ({
@@ -450,6 +471,98 @@ export class GuestPreorderStore {
             imageUrl: item.dish.imageUrl ?? undefined, qty: item.quantity,
         })));
         if (session.isSubmitted) this.status.set('submitted');
+    }
+
+    editReminderEmail(value: string): void {
+        this.emailInput.set(value);
+        this.emailDraftDirty.set(true);
+    }
+
+    editReminderConsent(value: boolean): void {
+        this.emailConsentInput.set(value);
+        this.emailDraftDirty.set(true);
+    }
+
+    async saveReminderEmail(): Promise<void> {
+        const id = this.guestSessionId();
+        const token = this.guestSessionToken();
+        const email = this.emailInput().trim();
+        if (!id || !token || this.status() === 'inactive' || this.emailBusy() || this.cartBusy() || this.preferenceBusy()) return;
+        this.emailError.set(null);
+        this.emailMessage.set(null);
+        if (!this.emailConsentInput() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            this.emailError.set('Enter a valid email and agree to receive pre-order reminders.');
+            return;
+        }
+        this.emailBusy.set(true);
+        try {
+            const response = await firstValueFrom(this.guestSessionsService.saveReminderEmail(id, token, email));
+            if (this.guestSessionId() !== id) return;
+            this.reminderEmail.set(response.email);
+            this.reminderConsent.set(response.consent);
+            this.revision.set(response.revision);
+            this.emailInput.set(response.email ?? '');
+            this.emailConsentInput.set(response.consent);
+            this.emailDraftDirty.set(false);
+            this.emailMessage.set('Reminder email saved.');
+        } catch (error) {
+            if (!this.invalidateIfRevoked(error, id)) this.emailError.set('Could not save reminder email. Please try again.');
+        } finally {
+            this.emailBusy.set(false);
+        }
+    }
+
+    async removeReminderEmail(): Promise<void> {
+        const id = this.guestSessionId();
+        const token = this.guestSessionToken();
+        if (!id || !token || this.status() === 'inactive' || this.emailBusy() || this.cartBusy() || this.preferenceBusy() || !this.reminderEmail()) return;
+        this.emailBusy.set(true);
+        this.emailError.set(null);
+        this.emailMessage.set(null);
+        try {
+            const response = await firstValueFrom(this.guestSessionsService.removeReminderEmail(id, token));
+            if (this.guestSessionId() !== id) return;
+            this.reminderEmail.set(null);
+            this.reminderConsent.set(false);
+            this.revision.set(response.revision);
+            this.emailInput.set('');
+            this.emailConsentInput.set(false);
+            this.emailDraftDirty.set(false);
+            this.emailMessage.set('Reminder email removed. Future reminders will appear here.');
+        } catch (error) {
+            if (!this.invalidateIfRevoked(error, id)) this.emailError.set('Could not remove reminder email. Please try again.');
+        } finally {
+            this.emailBusy.set(false);
+        }
+    }
+
+    async loadReminderNotifications(): Promise<void> {
+        const id = this.guestSessionId();
+        const token = this.guestSessionToken();
+        if (!id || !token || this.status() === 'inactive' || this.notificationsBusy()) return;
+        this.notificationsBusy.set(true);
+        this.notificationsError.set(null);
+        try {
+            const messages = await firstValueFrom(this.guestSessionsService.getReminderNotifications(id, token));
+            if (this.guestSessionId() === id) this.notifications.set(messages);
+        } catch (error) {
+            if (!this.invalidateIfRevoked(error, id))
+                this.notificationsError.set('Could not load reminders. Please try again.');
+        } finally {
+            this.notificationsBusy.set(false);
+        }
+    }
+
+    private clearReminderState(): void {
+        this.reminderEmail.set(null);
+        this.reminderConsent.set(false);
+        this.emailInput.set('');
+        this.emailConsentInput.set(false);
+        this.emailDraftDirty.set(false);
+        this.emailError.set(null);
+        this.emailMessage.set(null);
+        this.notifications.set([]);
+        this.notificationsError.set(null);
     }
 
     private invalidateIfRevoked(error: unknown, sessionId: string): boolean {
@@ -467,6 +580,7 @@ export class GuestPreorderStore {
         this.status.set('inactive');
         this.guestSessionId.set(null);
         this.guestSessionToken.set(null);
+        this.clearReminderState();
         this.cartItems.set([]);
         this.menuByCategory.set({});
         this.cartError.set(null);

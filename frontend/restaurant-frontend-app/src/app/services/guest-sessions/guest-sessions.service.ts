@@ -37,6 +37,21 @@ export interface GuestSessionResponse {
     isSubmitted: boolean;
     orderingPreference?: OrderingPreference;
     revision?: number;
+    email?: string | null;
+    emailConsent?: boolean;
+}
+
+export interface GuestReminderNotification {
+    id: string;
+    message: string;
+    createdAt: string;
+    isRead: boolean;
+}
+
+export interface GuestEmailResponse {
+    email: string | null;
+    consent: boolean;
+    revision: number;
 }
 
 export interface GuestMenuResponse {
@@ -70,6 +85,27 @@ export class GuestSessionsService {
         return this.http.patch<GuestSessionResponse>(
             `${this.baseUrl}/guest/sessions/${guestSessionId}/ordering-preference`,
             { preference, expectedRevision }, { headers: this.authHeaders(sessionToken) }
+        );
+    }
+
+    saveReminderEmail(guestSessionId: string, sessionToken: string, email: string) {
+        return this.http.put<GuestEmailResponse>(
+            `${this.baseUrl}/guest/sessions/${encodeURIComponent(guestSessionId)}/email`,
+            { email, consent: true }, { headers: this.authHeaders(sessionToken) }
+        );
+    }
+
+    removeReminderEmail(guestSessionId: string, sessionToken: string) {
+        return this.http.delete<GuestEmailResponse>(
+            `${this.baseUrl}/guest/sessions/${encodeURIComponent(guestSessionId)}/email`,
+            { headers: this.authHeaders(sessionToken) }
+        );
+    }
+
+    getReminderNotifications(guestSessionId: string, sessionToken: string) {
+        return this.http.get<GuestReminderNotification[]>(
+            `${this.baseUrl}/guest/sessions/${encodeURIComponent(guestSessionId)}/notifications`,
+            { headers: this.authHeaders(sessionToken) }
         );
     }
 

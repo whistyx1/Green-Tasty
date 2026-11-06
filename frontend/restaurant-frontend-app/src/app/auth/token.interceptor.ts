@@ -20,7 +20,7 @@ export const tokenInterceptor: HttpInterceptorFn = (
   // Owner group routes use Cognito; guest-session/invite routes keep their
   // explicit guest token and unchanged request body.
   const path = req.url.split(/[?#]/)[0];
-  const ownerGroupRequest = /\/guest\/groups\/[^/]+\/(?:sessions(?:\/[^/]+)?|status)\/?$/.test(path);
+  const ownerGroupRequest = /\/guest\/groups\/[^/]+\/(?:sessions(?:\/[^/]+(?:\/reminder)?)?|status)\/?$/.test(path);
   if (req.url.includes('/guest/') && !ownerGroupRequest) {
     return next(req).pipe(
       catchError((error: HttpErrorResponse) => {

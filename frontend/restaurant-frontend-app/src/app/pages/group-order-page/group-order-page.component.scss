@@ -131,6 +131,12 @@
   li span:first-child { overflow-wrap: anywhere; }
 }
 
+.reminder-hint { margin: 0 0 12px; color: color.$neutral-600; font-size: 13px; }
+.reminder-action { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.reminder-action .secondary-button { min-height: 36px; padding: 6px 12px; font-size: 13px; }
+.reminder-action small { color: color.$neutral-600; }
+.reminder-feedback { flex-basis: 100%; color: color.$green-800; font-size: 13px; }
+
 .grand-total {
   display: flex;
   align-items: baseline;

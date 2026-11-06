@@ -37,4 +37,16 @@ public class GuestSession
 
     [DynamoDBProperty("revision")]
     public long Revision { get; set; }
+
+    [DynamoDBProperty("reminderEmail")]
+    public string? ReminderEmail { get; set; }
+
+    [DynamoDBProperty("reminderEmailConsent")]
+    public bool ReminderEmailConsent { get; set; }
+
+    [DynamoDBProperty("lastReminderAtUnixMs")]
+    public long LastReminderAtUnixMs { get; set; }
+
+    [DynamoDBProperty("reminderAttemptId")]
+    public string? ReminderAttemptId { get; set; }
 }

@@ -1,3 +1,51 @@
+@if (store.guestSessionId() && store.status() !== 'inactive') {
+<section class="reminder-settings" aria-labelledby="reminder-settings-title">
+    <h2 id="reminder-settings-title">Pre-order reminders</h2>
+    @if (reminderEmailEnabled) {
+        <p>Optional: add an email address to receive a reminder before this reservation. You can change or remove it here. Without an email, reminders appear in this guest session instead.</p>
+        <label for="guest-reminder-email">Email for reminders</label>
+        <input id="guest-reminder-email" type="email" autocomplete="email" maxlength="254"
+            [value]="store.emailInput()" (input)="store.editReminderEmail($any($event.target).value)" />
+        <label class="reminder-consent" for="guest-reminder-consent">
+            <input id="guest-reminder-consent" type="checkbox" [checked]="store.emailConsentInput()"
+                (change)="store.editReminderConsent($any($event.target).checked)" />
+            I agree to receive emails about this reservation's pre-order reminders.
+        </label>
+        <div class="reminder-controls">
+            <button type="button" [disabled]="store.emailBusy() || store.cartBusy() || store.preferenceBusy()" (click)="store.saveReminderEmail()">
+                {{ store.emailBusy() ? 'Saving…' : store.reminderEmail() ? 'Update email' : 'Save email' }}
+            </button>
+            @if (store.reminderEmail()) {
+                <button type="button" [disabled]="store.emailBusy() || store.cartBusy() || store.preferenceBusy()" (click)="store.removeReminderEmail()">Remove email</button>
+            }
+        </div>
+        @if (store.emailError()) { <p role="alert">{{ store.emailError() }}</p> }
+        @if (store.emailMessage()) { <p role="status">{{ store.emailMessage() }}</p> }
+    } @else {
+        <p>Reminders for this reservation appear in this guest session. No email address is needed.</p>
+    }
+    <div class="reminder-controls">
+        <button type="button" [attr.aria-expanded]="showReminders()" aria-controls="guest-reminders"
+            (click)="toggleReminders()">{{ showReminders() ? 'Hide reminders' : 'View reminders' }}</button>
+    </div>
+    @if (showReminders()) {
+        <div id="guest-reminders" class="reminder-inbox" aria-label="Your pre-order reminders">
+            <button type="button" [disabled]="store.notificationsBusy()" (click)="store.loadReminderNotifications()">Refresh reminders</button>
+            @if (store.notificationsBusy()) { <p role="status">Loading reminders…</p> }
+            @if (store.notificationsError()) { <p role="alert">{{ store.notificationsError() }}</p> }
+            @if (!store.notificationsBusy() && !store.notificationsError()) {
+                @if (store.notifications().length) {
+                    <ul>
+                        @for (notice of store.notifications(); track notice.id) {
+                            <li><span>{{ notice.message }}</span><time [attr.datetime]="notice.createdAt">{{ notice.createdAt | date: 'medium' }}</time></li>
+                        }
+                    </ul>
+                } @else { <p>No reminders yet.</p> }
+            }
+        </div>
+    }
+</section>
+}
 @if (store.status() === 'inactive') {
 <section class="invite-retry" role="alert">
     <h1>This guest pre-order is no longer active</h1>
@@ -41,9 +89,9 @@
         <h2 id="guest-preference-title">How will you order?</h2>
         <div class="preference-actions" role="group" aria-label="Ordering preference">
             <button type="button" [attr.aria-pressed]="store.orderingPreference() === 'Online'"
-                [disabled]="store.preferenceBusy() || store.cartBusy()" (click)="store.setPreference('Online')">Online</button>
+                [disabled]="store.preferenceBusy() || store.cartBusy() || store.emailBusy()" (click)="store.setPreference('Online')">Online</button>
             <button type="button" [attr.aria-pressed]="store.orderingPreference() === 'InRestaurant'"
-                [disabled]="store.preferenceBusy() || store.cartBusy()" (click)="store.setPreference('InRestaurant')">In Restaurant</button>
+                [disabled]="store.preferenceBusy() || store.cartBusy() || store.emailBusy()" (click)="store.setPreference('InRestaurant')">In Restaurant</button>
         </div>
         @if (store.orderingPreference() === 'InRestaurant') {
             <p>Your draft dishes are saved. Switch back to Online to continue and submit them.</p>
@@ -102,7 +150,7 @@
                     @for (dish of visibleDishes(); track dish.id) {
                         <app-dish-card
                             [dish]="dish"
-                            [preOrderEnabled]="store.orderingPreference() === 'Online' && !store.preferenceBusy()"
+                            [preOrderEnabled]="store.orderingPreference() === 'Online' && !store.preferenceBusy() && !store.emailBusy()"
                             (preOrderClicked)="addDishToCart(dish)"
                         />
                     }
@@ -119,7 +167,7 @@
 
 <!-- cart drawer -->
 <app-guest-cart-drawer [open]="isCartOpen()" [items]="store.cartItems()" [total]="store.total()"
-    [busy]="store.cartBusy()" [online]="store.orderingPreference() === 'Online'" [error]="store.cartError()" (closed)="closeCart()"
+    [busy]="store.cartBusy() || store.emailBusy()" [online]="store.orderingPreference() === 'Online'" [error]="store.cartError()" (closed)="closeCart()"
     (goToMenu)="closeCart()" (inc)="store.inc($event)" (dec)="store.dec($event)" (remove)="store.remove($event)"
     (submitted)="openConfirmation()" />
 

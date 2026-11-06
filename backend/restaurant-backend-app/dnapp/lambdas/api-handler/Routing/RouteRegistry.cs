@@ -3,6 +3,7 @@ using Amazon.CognitoIdentityProvider;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.DataModel;
 using Amazon.S3;
+using Amazon.SimpleEmail;
 using Amazon.SQS;
 using APIHandler.Constants;
 using APIHandler.Handlers;
@@ -70,6 +71,7 @@ public static class RouteRegistry
         var dynamoDbClient = new AmazonDynamoDBClient(region);
         services.AddSingleton(dynamoDbClient);
         services.AddSingleton<IAmazonDynamoDB>(dynamoDbClient);
+        services.AddSingleton<IAmazonSimpleEmailService>(new AmazonSimpleEmailServiceClient(region));
         services.AddSingleton<IDynamoDBContext>(sp => new DynamoDBContextBuilder()
             .WithDynamoDBClient(() => sp.GetRequiredService<IAmazonDynamoDB>())
             .Build());
@@ -97,6 +99,7 @@ public static class RouteRegistry
         services.AddSingleton<IFeedbackRepository, FeedbackRepository>();
         services.AddSingleton<IReportRepository, ReportRepository>();
         services.AddSingleton<IGuestSessionRepository, GuestSessionRepository>();
+        services.AddSingleton<IReminderRepository, ReminderRepository>();
         services.AddSingleton<IGroupReservationRepository, GroupReservationRepository>();
         services.AddSingleton<IGroupPreOrderRepository, GroupPreOrderRepository>();
         services.AddSingleton<IGroupPreOrderService, GroupPreOrderService>();
@@ -116,6 +119,8 @@ public static class RouteRegistry
         services.AddSingleton<IReservationService, ReservationService>();
         services.AddSingleton<IFeedbackService, FeedbackService>();
         services.AddSingleton<IGuestSessionService, GuestSessionService>();
+        services.AddSingleton<IReminderEmailSender, ReminderEmailSender>();
+        services.AddSingleton<IReminderService, ReminderService>();
         services.AddSingleton<IGuestAuthorizationService, GuestAuthorizationService>();
         services.AddSingleton<IReportService, ReportService>();
 
@@ -194,8 +199,12 @@ public static class RouteRegistry
             new RouteHandler(new Route(HttpMethods.POST, "/reservations/{reservationId}/group-owner-submit"), ActivatorUtilities.CreateInstance<SubmitOwnerPreOrderHandler>(provider)),
             new RouteHandler(new Route(HttpMethods.POST, "/group-reservations/{groupReservationId}/submit"), ActivatorUtilities.CreateInstance<SubmitGroupPreOrderHandler>(provider)),
             new RouteHandler(new Route(HttpMethods.GET, "/guest/groups/{groupReservationId}/sessions"), ActivatorUtilities.CreateInstance<GetGroupSessionsHandler>(provider)),
+            new RouteHandler(new Route(HttpMethods.POST, "/guest/groups/{groupReservationId}/sessions/{guestSessionId}/reminder"), ActivatorUtilities.CreateInstance<SendGuestReminderHandler>(provider)),
             new RouteHandler(new Route(HttpMethods.POST, "/guest/sessions"), ActivatorUtilities.CreateInstance<CreateGuestSessionHandler>(provider)),
             new RouteHandler(new Route(HttpMethods.GET, "/guest/sessions/{guestSessionId}"), ActivatorUtilities.CreateInstance<GetGuestSessionHandler>(provider)),
+            new RouteHandler(new Route(HttpMethods.PUT, "/guest/sessions/{guestSessionId}/email"), ActivatorUtilities.CreateInstance<SetGuestReminderEmailHandler>(provider)),
+            new RouteHandler(new Route(HttpMethods.DELETE, "/guest/sessions/{guestSessionId}/email"), ActivatorUtilities.CreateInstance<RemoveGuestReminderEmailHandler>(provider)),
+            new RouteHandler(new Route(HttpMethods.GET, "/guest/sessions/{guestSessionId}/notifications"), ActivatorUtilities.CreateInstance<GetGuestReminderNotificationsHandler>(provider)),
             new RouteHandler(new Route(HttpMethods.POST, "/guest/sessions/{guestSessionId}/dishes"), ActivatorUtilities.CreateInstance<AddDishToGuestSessionHandler>(provider)),
             new RouteHandler(new Route(HttpMethods.DELETE, "/guest/sessions/{guestSessionId}/dishes"), ActivatorUtilities.CreateInstance<RemoveDishFromGuestSessionHandler>(provider)),
             new RouteHandler(new Route(HttpMethods.POST, "/guest/sessions/{guestSessionId}/submit"), ActivatorUtilities.CreateInstance<SubmitGuestCartHandler>(provider)),

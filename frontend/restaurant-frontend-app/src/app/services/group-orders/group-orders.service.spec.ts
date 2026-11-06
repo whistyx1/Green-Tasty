@@ -55,6 +55,16 @@ describe('Рівень 2 · GroupOrdersService', () => {
     req.flush({ currentParticipants: 3, maxCapacity: 5, status: 'Open' });
   });
 
+  it('sends a reminder to the selected guest session without guest email in the request', () => {
+    let result: unknown;
+    service.remindGuest$('group', 'guest-1').subscribe(value => result = value);
+    const request = http.expectOne(`${BASE_URL}/guest/groups/group/sessions/guest-1/reminder`);
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({});
+    request.flush({ channel: 'InApp', nextAllowedAt: '2030-01-01T12:00:00Z' });
+    expect(result).toEqual({ channel: 'InApp', nextAllowedAt: '2030-01-01T12:00:00Z' });
+  });
+
   it('submit$: POST /group-reservations/{id}/submit з тілом { reservationId }', () => {
     service.submit$('grp-1', 'res-1').subscribe();
     const req = http.expectOne(`${BASE_URL}/group-reservations/grp-1/submit`);

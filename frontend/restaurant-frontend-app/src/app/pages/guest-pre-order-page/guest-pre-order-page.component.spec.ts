@@ -7,7 +7,7 @@ import { GuestPreorderStore } from './state/guest-preorder.store';
 import { GuestPreOrderPageComponent } from './guest-pre-order-page.component';
 
 describe('GuestPreOrderPageComponent F6 submission', () => {
-  let store: Pick<GuestPreorderStore, 'status' | 'cartItems' | 'cartBusy' | 'orderingPreference' | 'inviteError' | 'submitPreorder' | 'initContext'>;
+  let store: Pick<GuestPreorderStore, 'status' | 'cartItems' | 'cartBusy' | 'emailBusy' | 'orderingPreference' | 'inviteError' | 'submitPreorder' | 'initContext'>;
   let fixture: ComponentFixture<GuestPreOrderPageComponent>;
 
   beforeEach(() => {
@@ -15,6 +15,7 @@ describe('GuestPreOrderPageComponent F6 submission', () => {
       status: signal<'active' | 'submitted' | 'inactive'>('active'),
       cartItems: signal([{ dishId: 'salad', title: 'Salad', price: 8, qty: 2 }]),
       cartBusy: signal(false),
+      emailBusy: signal(false),
       orderingPreference: signal<'Online' | 'InRestaurant'>('Online'),
       inviteError: signal<'expired' | 'retryable' | null>(null),
       submitPreorder: jasmine.createSpy('submitPreorder').and.resolveTo(),
@@ -40,6 +41,10 @@ describe('GuestPreOrderPageComponent F6 submission', () => {
     page.closeConfirmation();
     expect(page.confirmationOpen()).toBeFalse();
     expect(store.submitPreorder).not.toHaveBeenCalled();
+  });
+
+  it('keeps email collection disabled for the in-app-only release', () => {
+    expect(fixture.componentInstance.reminderEmailEnabled).toBeFalse();
   });
 
   it('confirms the guest submission only once during a pending request', async () => {

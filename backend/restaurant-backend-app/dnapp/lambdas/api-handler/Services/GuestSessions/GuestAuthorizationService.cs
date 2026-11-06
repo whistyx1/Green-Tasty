@@ -9,11 +9,11 @@ public class GuestAuthorizationService(IGuestSessionService guestSessionService)
 {
     public async ValueTask<APIGatewayProxyResponse?> ValidateAsync(APIGatewayProxyRequest request, ILambdaContext context, string guestSessionid)
     {
-        if (!request.Headers.TryGetValue("Authorization", out string? authorizationValue))
+        if (request.Headers is null || !request.Headers.TryGetValue("Authorization", out string? authorizationValue))
             return CreateErrorResponse(context);
 
         const string BearerString = "Bearer ";
-        if (!authorizationValue.StartsWith(BearerString) || authorizationValue.Length <= BearerString.Length)
+        if (authorizationValue is null || !authorizationValue.StartsWith(BearerString) || authorizationValue.Length <= BearerString.Length)
             return CreateErrorResponse(context);
 
         string token = authorizationValue[BearerString.Length..];

@@ -13,6 +13,7 @@ import { dirname, resolve } from 'node:path';
 
 const OUT_FILE = resolve('src/environments/environment.production.ts');
 const backendUrl = process.env.BACKEND_URL?.trim();
+const reminderEmailEnabled = process.env.REMINDER_EMAIL_ENABLED?.trim().toLowerCase() === 'true';
 
 if (!backendUrl) {
   console.error(
@@ -41,6 +42,7 @@ const contents = `// GENERATED FILE — do not edit, do not commit.
 // Produced by scripts/set-env.mjs from the BACKEND_URL environment variable.
 export const environment = {
   backendUrl: '${backendUrl.replace(/\/$/, '')}',
+  reminderEmailEnabled: ${reminderEmailEnabled},
 };
 `;
 

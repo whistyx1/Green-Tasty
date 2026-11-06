@@ -19,11 +19,11 @@ Green & Tasty is a full-stack restaurant reservation and group pre-order applica
 | F2 | Single Reservation Direct Submission | Implemented & Deployed |
 | F3 | Reservation Dashboard Filters | Implemented & Deployed |
 | F4 | Per-Guest Ordering Preference | Implemented & Deployed |
-| F5 | Manual Pre-order Reminders | Planned |
+| F5 | Manual Pre-order Reminders | In-app path deployed; email pending SES access |
 | F6 | Submission Confirmation Dialogs | Implemented & Deployed |
 | F7 | Group Progress & Final Submission Gate | Implemented & Deployed |
 
-**Progress: 6 of 7 planned features implemented and deployed to the AWS development environment.**
+**Progress: F1-F4, F6, and F7 are deployed. F5 in-app reminders are deployed and one authenticated delivery was verified; its email path awaits SES production access.**
 
 ---
 
@@ -60,11 +60,9 @@ The reservation owner can submit their own pre-order separately from the final g
 
 ## F5 — Manual Pre-order Reminders
 
-**Status: Planned — Not Yet Implemented**
+Group owners can manually remind pending Online guests between 60 and 30 minutes before the reservation starts. The current release stores reminders in the guest session's notification inbox and enforces a 15-minute cooldown using a conditional DynamoDB transaction. Optional email collection and SES delivery remain disabled until SES production access is granted.
 
-This feature will allow reservation owners to manually remind guests who have not submitted their online pre-orders.
-
-The planned MVP includes email reminders when an email address and consent are available, an in-app fallback, and cooldown protection to avoid repeated reminders.
+**Documentation:** [Implementation and Verification](F5-ManualPreorderReminders.md)
 
 ## F6 — Submission Confirmation Dialogs
 
@@ -119,4 +117,4 @@ The application is deployed to AWS using:
 
 ---
 
-*These feature records describe functionality added beyond the original EPAM homework. F5 remains planned and is not included in the implemented feature count.*
+*These feature records describe functionality added beyond the original EPAM homework. F5 email delivery is not yet deployed.*

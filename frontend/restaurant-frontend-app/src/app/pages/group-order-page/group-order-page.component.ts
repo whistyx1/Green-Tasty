@@ -104,6 +104,9 @@ export class GroupOrderPageComponent implements OnInit {
   readonly removeTarget = signal<Participant | null>(null);
   readonly removeError = signal('');
   readonly submittedSummaryIncomplete = signal(false);
+  readonly remindingGuestId = signal<string | null>(null);
+  readonly reminderNextAllowedAt = signal<Record<string, string>>({});
+  readonly reminderFeedback = signal<Record<string, string>>({});
 
   readonly consolidated = computed(() => {
     const finalOrder = this.submittedOrder();
@@ -226,8 +229,53 @@ export class GroupOrderPageComponent implements OnInit {
     this.submittedSummaryIncomplete.set(false);
     this.groupStatus.set(null);
     this.ownerSessionId.set('');
+    this.remindingGuestId.set(null);
+    this.reminderNextAllowedAt.set({});
+    this.reminderFeedback.set({});
     this.updatedAt.set(null);
     this.load();
+  }
+
+  reminderWindowOpen(): boolean {
+    const start = this.invite()?.StartTime;
+    if (!start || this.status() !== 'Open') return false;
+    const remaining = new Date(start).getTime() - Date.now();
+    return Number.isFinite(remaining) && remaining <= 60 * 60_000 && remaining > 30 * 60_000;
+  }
+
+  canRemind(person: Participant): boolean {
+    if (person.type !== 'Guest' || person.orderingPreference === 'InRestaurant' ||
+      person.isSubmitted || !this.reminderWindowOpen() || this.loading() || this.submitting() ||
+      this.remindingGuestId() !== null) return false;
+    const next = this.reminderNextAllowedAt()[person.id];
+    return !next || Date.parse(next) <= Date.now();
+  }
+
+  remindGuest(person: Participant): void {
+    const groupId = this.invite()?.GroupReservationId;
+    if (!groupId || !this.canRemind(person)) return;
+    this.remindingGuestId.set(person.id);
+    this.reminderFeedback.update(current => ({ ...current, [person.id]: '' }));
+    this.service.remindGuest$(groupId, person.id)
+      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.remindingGuestId.set(null)))
+      .subscribe({
+        next: response => {
+          this.reminderNextAllowedAt.update(current => ({ ...current, [person.id]: response.nextAllowedAt }));
+          this.reminderFeedback.update(current => ({
+            ...current, [person.id]: response.channel === 'Email'
+              ? 'Reminder email queued for delivery.' : 'Reminder added to this guest’s notifications.',
+          }));
+        },
+        error: error => {
+          const message = error instanceof HttpErrorResponse && error.status === 503
+            ? 'Email acceptance could not be confirmed. The guest may still receive it; wait 15 minutes before trying again.'
+            : error instanceof HttpErrorResponse && (error.status === 409 || error.status === 429)
+              ? 'Reminder is unavailable right now. Refresh the group and try later.'
+              : 'Reminder could not be delivered. Please try again.';
+          this.reminderFeedback.update(current => ({ ...current, [person.id]: message }));
+          this.refresh();
+        },
+      });
   }
 
   load(): void {

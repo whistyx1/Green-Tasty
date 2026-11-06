@@ -43,6 +43,17 @@ variable "email_from" {
   }
 }
 
+variable "enable_reminder_email" {
+  type        = bool
+  description = "Enable SES delivery for F5 reminders after production access is granted."
+  default     = false
+
+  validation {
+    condition     = !var.enable_reminder_email || trimspace(var.email_from) != ""
+    error_message = "Provide a verified email_from before enabling reminder emails."
+  }
+}
+
 variable "enable_weekly_reports" {
   type        = bool
   description = "Enable after SES sender/recipients and the Cognito Admin group are ready."

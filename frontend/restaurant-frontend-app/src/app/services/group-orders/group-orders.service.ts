@@ -137,6 +137,12 @@ export class GroupOrdersService {
     );
   }
 
+  remindGuest$(groupId: string, guestSessionId: string): Observable<{ channel: 'Email' | 'InApp'; nextAllowedAt: string }> {
+    return this.http.post<{ channel: 'Email' | 'InApp'; nextAllowedAt: string }>(
+      `${this.baseUrl}/guest/groups/${encodeURIComponent(groupId)}/sessions/${encodeURIComponent(guestSessionId)}/reminder`, {}
+    );
+  }
+
   setOwnerPreference$(reservationId: string, preference: OrderingPreference, expectedRevision: number): Observable<{ orderingPreference: OrderingPreference; isSubmitted: boolean; revision: number }> {
     return this.http.patch<{ orderingPreference: OrderingPreference; isSubmitted: boolean; revision: number }>(
       `${this.baseUrl}/reservations/${encodeURIComponent(reservationId)}/group-ordering-preference`, { preference, expectedRevision }

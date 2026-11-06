@@ -33,7 +33,9 @@ public class GuestSessionService(
 {
     public async Task<bool> IsAuthorizedAsync(string guestSessionToken, string guestSessionId)
     {
-        string hash = Convert.ToBase64String(SHA256.HashData(Convert.FromBase64String(guestSessionToken)));
+        string hash;
+        try { hash = Convert.ToBase64String(SHA256.HashData(Convert.FromBase64String(guestSessionToken))); }
+        catch (FormatException) { return false; }
         GuestSession? guestSession = await guestSessionRepository.GetByTokenHash(hash);
         if (guestSession is null)
             return false;
@@ -413,7 +415,8 @@ public class GuestSessionService(
         }
 
         return new GetGuestSessionResponse(name, items, total, session.IsSubmitted,
-            OrderingPreference.Effective(session.OrderingPreference), session.Revision);
+            OrderingPreference.Effective(session.OrderingPreference), session.Revision,
+            session.ReminderEmailConsent ? session.ReminderEmail : null, session.ReminderEmailConsent);
     }
 
 }
